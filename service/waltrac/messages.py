@@ -142,7 +142,7 @@ class Position(Payload):
 		offset += 4
 
 		# 1 byte namelen
-		namelen: int = struct.unpack_from('>I', data, offset)[0]
+		namelen: int = struct.unpack_from('>B', data, offset)[0]
 		offset += 1
 
 		# n bytes name
