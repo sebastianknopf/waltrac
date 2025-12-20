@@ -20,9 +20,6 @@ public:
     // If key == nullptr, append 16 zero bytes instead of HMAC.
     std::vector<uint8_t> serialize(const std::string* key = nullptr);
 
-    // Compute and store HMAC using provided key, return 16-byte signature.
-    std::array<uint8_t, 16> sign(const std::string& key);
-
     // Verify stored HMAC against provided key.
     bool verify(const std::string& key) const;
 
@@ -53,7 +50,7 @@ public:
     Position() = default;
 
     // Parse from raw bytes (throws std::runtime_error on error)
-    static Position fromBytes(const std::vector<uint8_t>& data);
+    static Position init(const std::vector<uint8_t>& data);
 
     // Serialize full message (fields + 16-byte HMAC) — delegates to Payload::serialize
     std::vector<uint8_t> serialize(const std::string* key = nullptr);
@@ -73,7 +70,7 @@ public:
 
     Command() = default;
 
-    static Command fromBytes(const std::vector<uint8_t>& data);
+    static Command init(const std::vector<uint8_t>& data);
     std::vector<uint8_t> serialize(const std::string* key = nullptr);
 
 protected:

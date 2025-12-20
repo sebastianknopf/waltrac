@@ -87,7 +87,6 @@ class Position(Payload):
 	latitude: float
 	longitude: float
 	timestamp: int
-	namelen: int
 	name: str
 	hmac: bytes
 
@@ -143,20 +142,20 @@ class Position(Payload):
 		offset += 4
 
 		# 1 byte namelen
-		p.namelen = struct.unpack_from('>B', data, offset)[0]
+		namelen: int = struct.unpack_from('>I', data, offset)[0]
 		offset += 1
 
 		# n bytes name
-		if len(data) < offset + p.namelen + 16:
+		if len(data) < offset + namelen + 16:
 			raise ValueError('data too short for name length and hmac')
 
-		name_bytes = data[offset : offset + p.namelen]
+		name_bytes = data[offset : offset + namelen]
 		try:
 			p.name = name_bytes.decode('utf-8')
 		except Exception as exc:  # keep decode errors explicit
 			raise ValueError('name is not valid UTF-8') from exc
 
-		offset += p.namelen
+		offset += namelen
 
 		# 16 bytes hmac
 		p.hmac = bytes(data[offset : offset + 16])
