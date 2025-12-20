@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from aiocoap import Message, Code, Context
 from aiocoap import resource
@@ -25,6 +26,9 @@ async def main():
     root.add_resource(['command'], CommandResource())
 
     await Context.create_server_context(root, bind=('0.0.0.0', 1999))
+
+    logging.info("CoAP Server listening on 0.0.0.0:1999")
+    await asyncio.get_running_loop().create_future()
 
 if __name__ == '__main__':
     asyncio.run(main())
