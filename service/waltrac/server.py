@@ -6,11 +6,25 @@ from aiocoap import resource
 
 from messages import Position, Command
 
+MAC_KEY = ''
+
 class PositionResource(resource.Resource):
     async def render_post(self, request: Message) -> Message:
-        print(f"Received Data: {request.payload!r}")
+        payload: bytes = request.payload
 
-        return Message(code=Code.CHANGED)
+        try:
+            pos: Position = Position.init(payload)
+
+            if not pos.verify(MAC_KEY):
+                return Message(code=Code.UNAUTHORIZED)
+            
+            logging.info(f"Processing Message: {pos}")
+
+            return Message(code=Code.CHANGED)
+            
+        except Exception as e:
+            return Message(code=Code.BAD_REQUEST)
+        
 
 class CommandResource(resource.Resource):
     async def render_get(self, request: Message) -> Message:
