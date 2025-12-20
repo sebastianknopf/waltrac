@@ -12,7 +12,7 @@ class PositionResource(resource.Resource):
     async def render_post(self, request: Message) -> Message:
         payload: bytes = request.payload
 
-        logging.info(f"Received Position Payload: {payload!r}")
+        print(f"Received Position Payload: {payload!r}")
 
         try:
             pos: Position = Position.init(payload)
