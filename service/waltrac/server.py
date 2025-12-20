@@ -23,6 +23,7 @@ class PositionResource(resource.Resource):
             return Message(code=Code.CHANGED)
             
         except Exception as e:
+            logging.warning(f"Failed to parse Position: {e}")
             return Message(code=Code.BAD_REQUEST)
         
 
