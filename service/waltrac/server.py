@@ -6,7 +6,7 @@ from aiocoap import resource
 
 from messages import Position, Command
 
-MAC_KEY = ''
+MAC_KEY = 'test'
 
 class PositionResource(resource.Resource):
     async def render_post(self, request: Message) -> Message:
