@@ -212,14 +212,12 @@ class Command(Payload):
 
 	# typed attributes
 	header: bytes
-	arglen: int
 	arg: str
 	hmac: bytes
 
 	def __init__(self) -> None:
 		# empty/default constructor
 		self.header = b"\x00"
-		self.arglen = 0
 		self.arg = ""
 		self.hmac = b"\x00" * 16
 
@@ -240,19 +238,20 @@ class Command(Payload):
 		offset += 1
 
 		# 1 byte arglen
-		c.arglen = struct.unpack_from('>B', data, offset)[0]
+		arglen: int = struct.unpack_from('>B', data, offset)[0]
 		offset += 1
 
-		if len(data) < offset + c.arglen + 16:
+		if len(data) < offset + arglen + 16:
 			raise ValueError('data too short for arg length and hmac')
 
-		arg_bytes = data[offset : offset + c.arglen]
+		arg_bytes = data[offset : offset + arglen]
+
 		try:
 			c.arg = arg_bytes.decode('utf-8')
 		except Exception as exc:
 			raise ValueError('arg is not valid UTF-8') from exc
 
-		offset += c.arglen
+		offset += arglen
 
 		# 16 bytes hmac
 		c.hmac = bytes(data[offset : offset + 16])
