@@ -71,7 +71,7 @@ static void compute_hmac_sha256_trunc(const uint8_t* key, size_t keylen, const u
 
 // --- Payload ---------------------------------------------------------------
 
-std::vector<uint8_t> Payload::serialize(const std::string* key) {
+std::vector<uint8_t> Payload::serialize(const char* key) {
     std::vector<uint8_t> fields = this->_serialize_fields();
     if (key == nullptr) {
         // append 16 zero bytes
@@ -81,22 +81,26 @@ std::vector<uint8_t> Payload::serialize(const std::string* key) {
     }
 
     uint8_t sig[16];
-    
-    compute_hmac_sha256_trunc(reinterpret_cast<const uint8_t*>(key->data()), key->size(), fields.data(), fields.size(), sig);
-    
+
+    compute_hmac_sha256_trunc(reinterpret_cast<const uint8_t*>(key), std::strlen(key), fields.data(), fields.size(), sig);
+
     std::copy(sig, sig + 16, this->hmac_.begin());
     fields.insert(fields.end(), sig, sig + 16);
-    
+
     return fields;
 }
 
-bool Payload::verify(const std::string& key) const {
+bool Payload::verify(const char* key) const {
+    if (key == nullptr) {
+        throw std::runtime_error("key is null");
+    }
+
     // hmac_ must be set
     uint8_t expected[16];
     std::vector<uint8_t> fields = this->_serialize_fields();
-    
-    compute_hmac_sha256_trunc(reinterpret_cast<const uint8_t*>(key.data()), key.size(), fields.data(), fields.size(), expected);
-    
+
+    compute_hmac_sha256_trunc(reinterpret_cast<const uint8_t*>(key), std::strlen(key), fields.data(), fields.size(), expected);
+
     return std::equal(expected, expected + 16, this->hmac_.begin());
 }
 
@@ -160,7 +164,7 @@ std::vector<uint8_t> Position::_serialize_fields() const {
     push_u8(parts, interval);
 
     // device (6 bytes)
-    parts.insert(parts.end(), device.begin(), device.end());
+    parts.insert(parts.end(), device, device + 6);
 
     // latitude
     int32_t lat_int = static_cast<int32_t>(round(latitude * SCALE));
@@ -184,7 +188,7 @@ std::vector<uint8_t> Position::_serialize_fields() const {
     return parts;
 }
 
-std::vector<uint8_t> Position::serialize(const std::string* key) {
+std::vector<uint8_t> Position::serialize(const char* key) {
     return Payload::serialize(key);
 }
 
@@ -246,7 +250,7 @@ std::vector<uint8_t> Command::_serialize_fields() const {
     return parts;
 }
 
-std::vector<uint8_t> Command::serialize(const std::string* key) {
+std::vector<uint8_t> Command::serialize(const char* key) {
     return Payload::serialize(key);
 }
 

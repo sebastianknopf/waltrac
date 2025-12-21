@@ -18,10 +18,11 @@ public:
 
     // Serialize full message including trailing 16-byte HMAC.
     // If key == nullptr, append 16 zero bytes instead of HMAC.
-    std::vector<uint8_t> serialize(const std::string* key = nullptr);
+    // Accept a raw C string to avoid constructing a std::string on Arduino.
+    std::vector<uint8_t> serialize(const char* key = nullptr);
 
-    // Verify stored HMAC against provided key.
-    bool verify(const std::string& key) const;
+    // Verify stored HMAC against provided key. Accept raw C string for Arduino.
+    bool verify(const char* key) const;
 
 protected:
     // Subclasses implement this to return the bytes that should be signed
@@ -39,7 +40,7 @@ public:
     // fields in order: header, interval, device(6), latitude, longitude, timestamp, namelen, name, hmac
     uint8_t header = 0;
     uint8_t interval = 0;
-    std::array<uint8_t, 6> device{{0}};
+    uint8_t device[6] = {0};
     double latitude = 0.0;   // stored as int32 = round(latitude * SCALE)
     double longitude = 0.0;  // stored as int32
     uint32_t timestamp = 0;  // 4 bytes unsigned
@@ -53,7 +54,7 @@ public:
     static Position init(const std::vector<uint8_t>& data);
 
     // Serialize full message (fields + 16-byte HMAC) — delegates to Payload::serialize
-    std::vector<uint8_t> serialize(const std::string* key = nullptr);
+    std::vector<uint8_t> serialize(const char* key = nullptr);
 
 protected:
     std::vector<uint8_t> _serialize_fields() const override;
@@ -71,7 +72,7 @@ public:
     Command() = default;
 
     static Command init(const std::vector<uint8_t>& data);
-    std::vector<uint8_t> serialize(const std::string* key = nullptr);
+    std::vector<uint8_t> serialize(const char* key = nullptr);
 
 protected:
     std::vector<uint8_t> _serialize_fields() const override;
