@@ -68,8 +68,6 @@ class Position(Payload):
 	- 6 bytes device (bytes)
 	- 4 bytes latitude (signed int, stored as int = float * 1e7)
 	- 4 bytes longitude (signed int, stored as int = float * 1e7)
-	- 4 bytes longitude (signed int, stored as int = float * 1e7)
-	- 4 bytes timestamp (unsigned int)
 	- 1 byte namelen (unsigned int)
 	- n bytes name (utf-8 string)
 	- 16 bytes hmac (bytes)
@@ -86,7 +84,6 @@ class Position(Payload):
 	device: bytes
 	latitude: float
 	longitude: float
-	timestamp: int
 	name: str
 	hmac: bytes
 
@@ -97,7 +94,6 @@ class Position(Payload):
 		self.interval = 0
 		self.latitude = 0.0
 		self.longitude = 0.0
-		self.timestamp = 0
 		self.namelen = 0
 		self.name = ""
 		self.hmac = b"\x00" * 16
@@ -108,7 +104,7 @@ class Position(Payload):
 			raise TypeError('data must be bytes or bytearray')
 
 		# minimum size without the variable-length name and hmac
-		min_fixed = 1 + 1 + 6 + 4 + 4 + 4 + 1 + 16
+		min_fixed = 1 + 1 + 6 + 4 + 4 + 1 + 16
 		if len(data) < min_fixed:
 			raise ValueError(f'data too short: need at least {min_fixed} bytes')
 
@@ -135,10 +131,6 @@ class Position(Payload):
 		# 4 byte longitude (signed int) -> float
 		lon_int = struct.unpack_from('>i', data, offset)[0]
 		p.longitude = float(lon_int) / p.SCALE
-		offset += 4
-
-		# 4 byte timestamp (unsigned int)
-		p.timestamp = struct.unpack_from('>I', data, offset)[0]
 		offset += 4
 
 		# 1 byte namelen
@@ -182,8 +174,7 @@ class Position(Payload):
 		lon_int = int(round(self.longitude * self.SCALE))
 		parts += struct.pack('>i', lon_int)
 
-		# timestamp: unsigned 32-bit
-		parts += struct.pack('>I', int(self.timestamp))
+		# (timestamp removed)
 
 		name_bytes = self.name.encode('utf-8')
 		parts += struct.pack('>B', len(name_bytes))
@@ -197,7 +188,7 @@ class Position(Payload):
 		return (
 			f"Position(header={self.header!r}, interval={self.interval}, "
 			f"device={self.device!r}, latitude={self.latitude}, "
-			f"longitude={self.longitude}, timestamp={self.timestamp}, name={self.name!r}, hmac={self.hmac!r})"
+			f"longitude={self.longitude}, name={self.name!r}, hmac={self.hmac!r})"
 		)
 
 
