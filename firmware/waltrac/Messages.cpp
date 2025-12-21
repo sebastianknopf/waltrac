@@ -108,7 +108,8 @@ bool Payload::verify(const char* key) const {
 
 Position Position::init(const std::vector<uint8_t>& data) {
     // min_fixed = 1(header) +1(interval)+6(device)+4(lat)+4(lon)+4(ts)+1(namelen)+16(hmac)
-    const size_t min_fixed = 1 + 1 + 6 + 4 + 4 + 4 + 1 + 16;
+        // min_fixed = 1(header) +1(interval)+6(device)+4(lat)+4(lon)+1(namelen)+16(hmac)
+        const size_t min_fixed = 1 + 1 + 6 + 4 + 4 + 1 + 16;
     if (data.size() < min_fixed) {
         throw std::runtime_error("data too short for Position");
     }
@@ -130,8 +131,6 @@ Position Position::init(const std::vector<uint8_t>& data) {
     offset += 4;
     p.longitude = static_cast<double>(lon_int) / Position::SCALE;
 
-    p.timestamp = read_be_u32(data, offset);
-    offset += 4;
 
     uint8_t namelen = data[offset++];
 
@@ -174,8 +173,7 @@ std::vector<uint8_t> Position::_serialize_fields() const {
     int32_t lon_int = static_cast<int32_t>(round(longitude * SCALE));
     push_be_i32(parts, lon_int);
 
-    // timestamp
-    push_be_u32(parts, timestamp);
+        // (timestamp removed)
 
     // name
     if (name.size() > 255) {
@@ -194,10 +192,10 @@ std::vector<uint8_t> Position::serialize(const char* key) {
 
 std::string Position::toString() const {
     char buf[200];
-    snprintf(buf, sizeof(buf), "Position(header=%u, interval=%u, device=[%02x%02x%02x%02x%02x%02x], lat=%.7f, lon=%.7f, ts=%u, name=%s)",
+    snprintf(buf, sizeof(buf), "Position(header=%u, interval=%u, device=[%02x%02x%02x%02x%02x%02x], lat=%.7f, lon=%.7f, name=%s)",
              header, interval,
              device[0], device[1], device[2], device[3], device[4], device[5],
-             latitude, longitude, timestamp, name.c_str());
+             latitude, longitude, name.c_str());
     
     return std::string(buf);
 }

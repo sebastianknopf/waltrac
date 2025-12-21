@@ -37,13 +37,13 @@ class Position : public Payload {
 public:
     static constexpr double SCALE = 1e7;
 
-    // fields in order: header, interval, device(6), latitude, longitude, timestamp, namelen, name, hmac
+    // fields in order: header, interval, device(6), latitude, longitude, namelen, name, hmac
     uint8_t header = 0;
     uint8_t interval = 0;
     uint8_t device[6] = {0};
     double latitude = 0.0;   // stored as int32 = round(latitude * SCALE)
     double longitude = 0.0;  // stored as int32
-    uint32_t timestamp = 0;  // 4 bytes unsigned
+    // timestamp removed
     std::string name;
 
     // HMAC is in Payload.hmac_
