@@ -268,6 +268,6 @@ class Command(Payload):
 
 	def __repr__(self) -> str:  # pragma: no cover - convenience
 		return (
-			f"Command(header={self.header!r}, arglen={self.arglen}, "
+			f"Command(header={self.header!r}, "
 			f"arg={self.arg!r}, hmac={self.hmac!r})"
 		)

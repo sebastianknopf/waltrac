@@ -37,18 +37,23 @@ class PositionResource(resource.Resource):
         
 
 class CommandResource(resource.Resource):
+    def __init__(self, secret: str) -> None:
+        super().__init__()
+        
+        self._secret = secret
+    
     async def render_get(self, request: Message) -> Message:
         cmd: Command = Command()
         cmd.header = b'\x05'
         cmd.arg = 'TE-ST4'
 
-        return Message(code=Code.CONTENT, payload=cmd.serialize())
+        return Message(code=Code.CONTENT, payload=cmd.serialize(self._secret))
 
 
 async def run(secret: str, host: str, port: int) -> None:
     root = resource.Site()
     root.add_resource(['position'], PositionResource(secret))
-    root.add_resource(['command'], CommandResource())
+    root.add_resource(['command'], CommandResource(secret))
 
     await Context.create_server_context(root, bind=(host, port))
 
