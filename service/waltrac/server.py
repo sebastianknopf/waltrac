@@ -17,17 +17,22 @@ class PositionResource(resource.Resource):
     async def render_post(self, request: Message) -> Message:
         payload: bytes = request.payload
 
+        logging.debug(f"Received Message: {payload.hex()}")
+
         try:
             pos: Position = Position.init(payload)
 
             if not pos.verify(self._secret):
+                logging.error(f"Received message with invalid signature, discarding message.")
                 return Message(code=Code.UNAUTHORIZED)
             
-            print(f"Processing Message: {pos}")
+            logging.info(f"Processing: {pos}")
+            # TODO: extend real processing here ...
 
             return Message(code=Code.CHANGED)
             
         except Exception as e:
+            logging.error(f"Received invalid payload, discarding message.")
             return Message(code=Code.BAD_REQUEST)
         
 
@@ -54,14 +59,14 @@ async def run(secret: str, host: str, port: int) -> None:
 @click.option('--secret', required=True, help='Secret for encryption and verification')
 @click.option('--host', default='0.0.0.0', help='Host to bind the server to')
 @click.option('--port', default=1999, help='Port to bind the server to')
-def main(secret: str, host: str, port: int) -> None:
+@click.option('--debug', is_flag=True, default=False, help='Enable debug logging')
+def main(secret: str, host: str, port: int, debug: bool) -> None:
+    # set logging default configuration
+    logging.basicConfig(format="[%(levelname)s] %(asctime)s %(message)s", level=logging.DEBUG if debug else logging.INFO)
+    
     asyncio.run(run(secret, host, port))
 
 if __name__ == '__main__':
-
-    # set logging default configuration
-    logging.basicConfig(format="[%(levelname)s] %(asctime)s %(message)s", level=logging.INFO)
-    
     # run the main command
     main()
 
