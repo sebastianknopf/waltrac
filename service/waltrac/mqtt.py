@@ -1,30 +1,23 @@
 import asyncio
 import logging
-import random
-import string
 
 from aiomqtt import Client
 
 
 class MqttPublisher:
     def __init__(self, host: str, port: int, username: str|None, password: str|None, toplevel: str = 'waltrac'):
-        client_random: str = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-        client_id: str = f"waltrac-gateway-{client_random}"
-        
         if username is not None and password is not None:
             self._client: Client = Client(
                 hostname=host,
                 port=port,
                 username=username,
                 password=password,
-                client_id=client_id,
                 keepalive=60,
             )
         else:
             self._client: Client = Client(
                 hostname=host,
                 port=port,
-                client_id=client_id,
                 keepalive=60,
             )
 
