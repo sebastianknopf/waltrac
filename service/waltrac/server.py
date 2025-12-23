@@ -55,7 +55,7 @@ class PositionResource(resource.Resource):
             data: dict|None = await self._process_position(payload)
 
             if data is not None:
-                await self._mqtt.publish(f"waltrac/position/{data['dv']}", json.dumps(data).encode('utf-8'))
+                await self._mqtt.publish(f"position/{data['dv']}", json.dumps(data).encode('utf-8'))
  
             return Message(code=Code.CHANGED, payload=bytes.fromhex('00')) 
             
@@ -95,6 +95,7 @@ async def run(secret: str, mqtt: str, host: str, port: int) -> None:
         port=int(mqtt_port),
         username=mqtt_username,
         password=mqtt_password,
+        toplevel=mqtt_topic.lstrip('/')
     )
 
     await mqtt.start()
