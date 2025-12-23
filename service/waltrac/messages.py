@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 import hmac
 import hashlib
-from typing import Optional
+from typing import Optional, Tuple
 
 from abc import ABC, abstractmethod
 
@@ -97,6 +97,29 @@ class Position(Payload):
 		self.namelen = 0
 		self.name = ""
 		self.hmac = b"\x00" * 16
+
+	def set_header(self, valid: bool, num_satellites: int) -> None:
+		"""Set the single-byte header from components.
+
+		MSB is always 1, bit 6 is the `valid` flag, bits 5-0 contain
+		the satellite count (masked to 6 bits).
+		"""
+		header_val = 0x80 | ((1 if valid else 0) << 6) | (num_satellites & 0x3F)
+		self.header = bytes([header_val])
+
+	def get_header(self) -> Tuple[bool, int]:
+		"""Return (valid, num_satellites) decoded from the header byte."""
+		if isinstance(self.header, (bytes, bytearray)):
+			if len(self.header) != 1:
+				raise ValueError('header must be a single byte')
+			b = self.header[0]
+		else:
+			b = int(self.header)
+
+		valid = bool((b >> 6) & 0x01)
+		num_satellites = b & 0x3F
+		
+		return (valid, num_satellites)
 
 	@staticmethod
 	def init(data: bytes) -> "Position":

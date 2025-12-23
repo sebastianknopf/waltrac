@@ -5,6 +5,7 @@ import logging
 
 from aiocoap import Message, Code, Context
 from aiocoap import resource
+from time import time
 from urllib.parse import urlparse
 
 from messages import Position, Command
@@ -32,10 +33,12 @@ class PositionResource(resource.Resource):
             
             logging.info(f"Processing: {pos}")
 
+            (valid, num_satellites) = pos.get_header()
             data: dict = {
                 'dv': pos.device.hex(),
-                'vl': True,
-                'st': 5,
+                'ts': int(time()),
+                'vl': valid,
+                'st': num_satellites,
                 'lt': pos.latitude,
                 'lg': pos.longitude,
                 'nm': pos.name
