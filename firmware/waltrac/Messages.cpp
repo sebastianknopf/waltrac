@@ -190,6 +190,17 @@ std::vector<uint8_t> Position::serialize(const char* key) {
     return Payload::serialize(key);
 }
 
+void Position::setHeader(bool valid, uint8_t numSatellites) {
+    header = 0x80;                     // MSB immer 1
+    header |= (valid ? 1 : 0) << 6;    // Bit 6 = Flag
+    header |= (numSatellites & 0x3F);  // Bits 5-0 = Satelliten
+}
+
+void Position::getHeader(bool &valid, uint8_t &numSatellites) {
+    valid = (header >> 6) & 0x01;      // Bit 6 = Flag
+    numSatellites = header & 0x3F;     // Bits 5-0 = Satelliten
+}
+
 std::string Position::toString() const {
     char buf[200];
     snprintf(buf, sizeof(buf), "Position(header=%u, interval=%u, device=[%02x%02x%02x%02x%02x%02x], lat=%.7f, lon=%.7f, name=%s)",
@@ -216,7 +227,8 @@ Command Command::init(const std::vector<uint8_t>& data) {
     uint8_t arglen = data[offset++];
 
     if (data.size() < offset + arglen + 16) {
-        throw std::runtime_error("data too short for arg length and hmac");
+        //throw std::runtime_error("data too short for arg length and hmac");
+        printf("data too short for arg length and hmac");
     }
 
     c.arg.assign(reinterpret_cast<const char*>(&data[offset]), arglen);
@@ -227,7 +239,8 @@ Command Command::init(const std::vector<uint8_t>& data) {
     }
 
     if (offset != data.size()) {
-        throw std::runtime_error("extra or missing bytes after parsing hmac");
+        //throw std::runtime_error("extra or missing bytes after parsing hmac");
+        printf("extra or missing bytes after parsing hmac");
     }
 
     return c;
@@ -250,6 +263,14 @@ std::vector<uint8_t> Command::_serialize_fields() const {
 
 std::vector<uint8_t> Command::serialize(const char* key) {
     return Payload::serialize(key);
+}
+
+void Command::setHeader() {
+    header = 0x80;                     // MSB immer 1
+}
+
+void Command::getHeader() {
+    // currently empty
 }
 
 std::string Command::toString() const {

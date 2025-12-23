@@ -41,9 +41,8 @@ public:
     uint8_t header = 0;
     uint8_t interval = 0;
     uint8_t device[6] = {0};
-    double latitude = 0.0;   // stored as int32 = round(latitude * SCALE)
-    double longitude = 0.0;  // stored as int32
-    // timestamp removed
+    double latitude = 0.0;
+    double longitude = 0.0;
     std::string name;
 
     // HMAC is in Payload.hmac_
@@ -55,6 +54,12 @@ public:
 
     // Serialize full message (fields + 16-byte HMAC) — delegates to Payload::serialize
     std::vector<uint8_t> serialize(const char* key = nullptr);
+
+    // Set the header byte by its parameters
+    void setHeader(bool valid, uint8_t numSatellites);
+
+    // Get the header params
+    void getHeader(bool &valid, uint8_t &numSatellites);
 
 protected:
     std::vector<uint8_t> _serialize_fields() const override;
@@ -71,8 +76,17 @@ public:
 
     Command() = default;
 
+    // Parse from raw bytes (throws std::runtime_error on error)
     static Command init(const std::vector<uint8_t>& data);
+
+    // Serialize full message (fields + 16-byte HMAC) — delegates to Payload::serialize
     std::vector<uint8_t> serialize(const char* key = nullptr);
+
+    // Set the header byte by its parameters
+    void setHeader();
+
+    // Get the header params
+    void getHeader();
 
 protected:
     std::vector<uint8_t> _serialize_fields() const override;

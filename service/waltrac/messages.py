@@ -118,7 +118,7 @@ class Position(Payload):
 
 		valid = bool((b >> 6) & 0x01)
 		num_satellites = b & 0x3F
-		
+
 		return (valid, num_satellites)
 
 	@staticmethod
@@ -235,6 +235,16 @@ class Command(Payload):
 		self.arg = ""
 		self.hmac = b"\x00" * 16
 
+	def set_header() -> None:
+		"""Set the single-byte header from components."""
+
+		pass
+
+	def get_header(self) -> Tuple:
+		"""Return empty tuple() decoded from the header byte."""
+
+		return tuple()
+	
 	@staticmethod
 	def init(data: bytes) -> "Command":
 		if not isinstance(data, (bytes, bytearray)):
