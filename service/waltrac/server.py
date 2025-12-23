@@ -41,7 +41,7 @@ class PositionResource(resource.Resource):
                 'nm': pos.name
             }
 
-            self._mqtt.publish(f"waltrac/position/{pos.device.hex()}", json.dumps(data).encode('utf-8'))
+            await self._mqtt.publish(f"waltrac/position/{pos.device.hex()}", json.dumps(data).encode('utf-8'))
 
             return Message(code=Code.CHANGED, payload=bytes.fromhex('00'))
             

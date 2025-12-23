@@ -1,3 +1,4 @@
 aiocoap
 aiomqtt
 click
+typing-extensions
