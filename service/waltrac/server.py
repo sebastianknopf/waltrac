@@ -24,16 +24,16 @@ class PositionResource(resource.Resource):
 
             if not pos.verify(self._secret):
                 logging.error(f"Received message with invalid signature, discarding message.")
-                return Message(code=Code.UNAUTHORIZED)
+                return Message(code=Code.UNAUTHORIZED, payload=bytes.fromhex('00'))
             
             logging.info(f"Processing: {pos}")
             # TODO: extend real processing here ...
 
-            return Message(code=Code.CHANGED)
+            return Message(code=Code.CHANGED, payload=bytes.fromhex('00'))
             
         except Exception as e:
             logging.error(f"Received invalid payload, discarding message.")
-            return Message(code=Code.BAD_REQUEST)
+            return Message(code=Code.BAD_REQUEST, payload=bytes.fromhex('00'))
         
 
 class CommandResource(resource.Resource):
