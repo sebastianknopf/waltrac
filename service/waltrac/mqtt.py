@@ -1,0 +1,39 @@
+import asyncio
+import logging
+
+from aio_mqtt import Client
+
+
+class MqttPublisher:
+    def __init__(self, host: str, port: int, username: str, password: str):
+        self._client = Client(
+            hostname=host,
+            port=port,
+            username=username,
+            password=password,
+            keepalive=30,
+        )
+
+        self._connected = asyncio.Event()
+
+    async def start(self):
+        asyncio.create_task(self._run())
+
+    async def _run(self):
+        while True:
+            try:
+                async with self._client:
+                    logging.info("Connected to MQTT broker.")
+
+                    self._connected.set()
+                    await asyncio.get_running_loop().create_future()
+
+            except Exception as e:
+                logging.error(f"Connection to MQTT broker interrupted, re-connecting in 5s.")
+
+                self._connected.clear()
+                await asyncio.sleep(5)
+
+    async def publish(self, topic: str, payload: bytes):
+        await self._connected.wait()
+        await self._client.publish(topic, payload)
