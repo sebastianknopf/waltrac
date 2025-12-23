@@ -19,11 +19,7 @@ class PositionResource(resource.Resource):
         self._secret = secret
         self._mqtt = mqtt
 
-    async def render_post(self, request: Message) -> Message:
-        payload: bytes = request.payload
-
-        logging.debug(f"Received Message: {payload.hex()}")
-
+    async def _process_position(self, payload: bytes) -> dict|None:
         try:
             pos: Position = Position.init(payload)
 
@@ -44,12 +40,27 @@ class PositionResource(resource.Resource):
                 'nm': pos.name
             }
 
-            await self._mqtt.publish(f"waltrac/position/{pos.device.hex()}", json.dumps(data).encode('utf-8'))
-
-            return Message(code=Code.CHANGED, payload=bytes.fromhex('00'))
-            
+            return data
+        
         except Exception as e:
             logging.error(f"Received invalid payload, discarding message.")
+            return None
+    
+    async def render_post(self, request: Message) -> Message:
+        payload: bytes = request.payload
+
+        logging.debug(f"Received Message: {payload.hex()}")
+
+        try:
+            data: dict|None = await self._process_position(payload)
+
+            if data is not None:
+                await self._mqtt.publish(f"waltrac/position/{data['dv']}", json.dumps(data).encode('utf-8'))
+ 
+            return Message(code=Code.CHANGED, payload=bytes.fromhex('00')) 
+            
+        except Exception as e:
+            logging.error(f"Error processing position message: {e}")
             return Message(code=Code.BAD_REQUEST, payload=bytes.fromhex('00'))
         
 
