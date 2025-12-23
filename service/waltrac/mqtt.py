@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from aio_mqtt import Client
+from aiomqtt import Client
 
 
 class MqttPublisher:
