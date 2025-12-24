@@ -56,9 +56,7 @@ class MqttPublisher:
 
                     self._connected.set()
                     
-                    while True:
-                        await asyncio.sleep(10)
-                        await client.ping()
+                    await asyncio.Event().wait()
 
             except asyncio.CancelledError:
                 raise
@@ -71,4 +69,13 @@ class MqttPublisher:
 
     async def publish(self, topic: str, payload: bytes):
         await self._connected.wait()
-        await self._client.publish(f"{self._toplevel}/{topic}", payload)
+        
+        try:
+            await self._client.publish(f"{self._toplevel}/{topic}", payload)
+        except Exception:
+            self._connected.clear()
+            
+            if self._task:
+                self._task.cancel()
+            
+            raise
