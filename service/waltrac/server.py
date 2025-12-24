@@ -98,16 +98,20 @@ async def run(secret: str, mqtt: str, host: str, port: int) -> None:
         toplevel=mqtt_topic.lstrip('/')
     )
 
-    await mqtt.start()
-    
-    root = resource.Site()
-    root.add_resource(['position'], PositionResource(secret, mqtt))
-    root.add_resource(['command'], CommandResource(secret))
+    try:
+        await mqtt.start()
+        
+        root = resource.Site()
+        root.add_resource(['position'], PositionResource(secret, mqtt))
+        root.add_resource(['command'], CommandResource(secret))
 
-    await Context.create_server_context(root, bind=(host, port))
+        await Context.create_server_context(root, bind=(host, port))
 
-    logging.info(f"CoAP Server listening on {host}:{port}")
-    await asyncio.get_running_loop().create_future()
+        logging.info(f"CoAP Server listening on {host}:{port}")
+        await asyncio.get_running_loop().create_future()
+    except KeyboardInterrupt:
+        logging.info("Shutting down server...")
+        await mqtt.stop()
 
 @click.command()
 @click.option('--secret', required=True, help='Secret for encryption and verification')
