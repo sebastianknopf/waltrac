@@ -55,7 +55,7 @@ class MqttPublisher:
                     logging.info("Connected to MQTT broker.")
 
                     self._connected.set()
-                    await asyncio.get_running_loop().create_future()
+                    await client.disconnected()
 
             except asyncio.CancelledError:
                 raise
@@ -68,7 +68,4 @@ class MqttPublisher:
 
     async def publish(self, topic: str, payload: bytes):
         await self._connected.wait()
-        if self._client is None:
-            raise RuntimeError("MQTT client not connected")
-
         await self._client.publish(f"{self._toplevel}/{topic}", payload)
