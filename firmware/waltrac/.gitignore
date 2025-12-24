@@ -35,4 +35,7 @@
 *.out
 *.app
 
+# Project Specific
+WaltracConfig.h
+
 # End of https://www.toptal.com/developers/gitignore/api/c++

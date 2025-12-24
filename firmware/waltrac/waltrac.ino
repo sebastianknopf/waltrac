@@ -3,15 +3,7 @@
 #include <esp_mac.h>
 
 #include "Messages.h"
-
-#define WT_SERVER_HOST "waltrac.skc-hub.app"
-#define WT_SERVER_PORT 1999
-
-#define WT_INTERVAL_CMD_UPDATE 60
-#define WT_INTERVAL_GNSS_UPDATE 0
-
-#define WT_CFG_NAME "TE-ST6"
-#define WT_CFG_SECRET "test"
+#include "WaltracConfig.h"
 
 /**
  * @brief COAP profile used for connection.
@@ -64,14 +56,14 @@ WalterModemGNSSFix latestGnssFix = {};
 uint8_t macBuf[6] = {0};
 
 /**
- * @brief The buffer to transmit to the COAP server.
- */
-uint8_t dataBuf[8] = {0};
-
-/**
  * @brief Buffer for incoming COAP response
  */
 uint8_t incomingBuf[274] = {0};
+
+/**
+ * @brief The counter for maintaining GNSS timeouts.
+ */
+uint32_t gnssFixTimeoutCounter = 0;
 
 /**
  * @brief The counter for maintaining dynamic command update interval.
@@ -87,7 +79,8 @@ uint8_t counterGnssUpd = 0;
  * @brief This function waits for the modem to be connected to the Lte network.
  * @return true if the connected, else false on timeout.
  */
-bool waitForNetwork() {
+bool waitForNetwork() 
+{
     /* Wait for the network to become available */
     int timeout = 0;
     while (!isLteConnected()) {
@@ -107,7 +100,8 @@ bool waitForNetwork() {
  * @brief This function tries to connect the modem to the cellular network.
  * @return true if the connection attempt is successful, else false.
  */
-bool lteConnect() {
+bool lteConnect() 
+{
     if (modem.setOpState(WALTER_MODEM_OPSTATE_NO_RF)) {
         Serial.println("Successfully set operational state to NO RF.");
     } else {
@@ -147,7 +141,8 @@ bool lteConnect() {
  *
  * @return True when connected, False otherwise
  */
-bool isLteConnected() {
+bool isLteConnected() 
+{
     WalterModemNetworkRegState regState = modem.getNetworkRegState();
     return (regState == WALTER_MODEM_NETWORK_REG_REGISTERED_HOME || regState == WALTER_MODEM_NETWORK_REG_REGISTERED_ROAMING);
 }
@@ -349,38 +344,10 @@ bool validateGNSSClock(WalterModemRsp* rsp)
 }
 
 /**
- * @brief GNSS event handler
- *
- * Handles GNSS fix events.
- * @note This callback is invoked from the modem driver’s event context.
- *       It must never block or call modem methods directly.
- *       Use it only to set flags or copy data for later processing.
- *
- * @param fix The fix data.
- * @param args User argument pointer passed to gnssSetEventHandler
- *
- * @return None.
+ * @brief This function checks al pre conditions and enables GNSS quick fix, if last fix was valid.
+ * @return true if the configuration succeeded, else false.
  */
-void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
-{
-    latestGnssFix = *fix;
-
-    /* Count satellites with good signal strength */
-    gnssFixNumSatellites = 0;
-    for(int i = 0; i < latestGnssFix.satCount; ++i) {
-        if(latestGnssFix.sats[i].signalStrength >= 30) {
-            gnssFixNumSatellites++;
-        }
-    }
-
-    gnssFixRcvd = true;
-}
-
-/**
- * @brief This function starts a GNSS fix and waits until the fix is received. If the fix is not confident enough, fixes are triggered until the confidence level is reached or a timeout occured.
- * @return true if a valid GNSS fix has be obtained, false if not.
- */
-bool attemptGNSSFix()
+bool initAndConfigureGnss() 
 {
     WalterModemRsp rsp = {};
 
@@ -410,9 +377,48 @@ bool attemptGNSSFix()
         }
     }
 
-    uint32_t gnssFixTimeoutCounter = 0;
-    uint8_t gnssFixTimeoutPrescaler = 2;
+    return true;
+}
 
+/**
+ * @brief GNSS event handler
+ *
+ * Handles GNSS fix events.
+ * @note This callback is invoked from the modem driver’s event context.
+ *       It must never block or call modem methods directly.
+ *       Use it only to set flags or copy data for later processing.
+ *
+ * @param fix The fix data.
+ * @param args User argument pointer passed to gnssSetEventHandler
+ *
+ * @return None.
+ */
+void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
+{
+    latestGnssFix = *fix;
+
+    /* Count satellites with good signal strength */
+    gnssFixNumSatellites = 0;
+    for(int i = 0; i < latestGnssFix.satCount; ++i) {
+        if(latestGnssFix.sats[i].signalStrength >= 30) {
+            gnssFixNumSatellites++;
+        }
+    }
+    
+    Serial.printf("Received GNSS fix to %.06f, %.06f with %d satellites.\r\n", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
+
+    gnssFixTimeoutCounter = 0;
+    gnssFixRcvd = true;
+}
+
+/**
+ * @brief This function starts an initial GNSS fix and runs a configurable number of attempts to find satellites.
+ * @return true if satellites were found and confidence is enough, else false.
+ */
+bool waitForInitialGnssFix() 
+{    
+    initAndConfigureGnss();
+    
     const uint8_t maxGnssFixAttempts = MAX_GNSS_FIX_ATTEMPTS;
     for (uint8_t i = 0; i < maxGnssFixAttempts; i++) {
         gnssFixRcvd = false;
@@ -421,31 +427,48 @@ bool attemptGNSSFix()
             return false;
         }
 
-        Serial.printf("Waiting for GNSS fix attempt %d/%d ", (i + 1), maxGnssFixAttempts);
+        Serial.printf("Waiting for GNSS fix attempt %d/%d\r\n", (i + 1), maxGnssFixAttempts);
         while(!gnssFixRcvd) {
-            Serial.print(".");
-            delay(1000 / gnssFixTimeoutPrescaler);
+            delay(1000);
 
-            if (gnssFixTimeoutCounter++ >= MAX_GNSS_FIX_DURATION_SECONDS * gnssFixTimeoutPrescaler) {
+            if (gnssFixTimeoutCounter++ >= MAX_GNSS_FIX_DURATION_SECONDS) {
                 Serial.println("\r\nGNSS fix timeout. Restarting ESP ...");
 
                 delay(1000);
                 ESP.restart();
             }
         }
-        Serial.printf("\r\n");
 
         /* If confidence is acceptable, stop trying. Otherwise, try again */
         if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
-            Serial.printf("GNSS fix successful, found %d (%d good) satellites, position is %.06f, %.06f\r\n", latestGnssFix.satCount, gnssFixNumSatellites, latestGnssFix.latitude, latestGnssFix.longitude);
+            Serial.printf("GNSS is available, found %d satellites.\r\n", gnssFixNumSatellites);
             return true;
         } else {
-            Serial.printf("GNSS fix confidence %.02f too low, found %d (%d good) satellites, retrying ...\r\n", latestGnssFix.estimatedConfidence, latestGnssFix.satCount, gnssFixNumSatellites);
+            Serial.printf("GNSS fix confidence %.02f too low, found %d satellites, retrying ...\r\n", gnssFixNumSatellites);
         }
     }
 
-    Serial.println("Could not find valid GNSS fix.");
-    return false;    
+    Serial.println("Could not succeed initial GNSS fix.");
+    return false; 
+}
+
+/**
+ * @brief This function requests a single GNSS fix.
+ * @return true if the fix could be requested, else false.
+ */
+bool requestGnssFix()
+{
+    initAndConfigureGnss();
+    
+    gnssFixRcvd = false;
+    if(modem.gnssPerformAction()) {
+        Serial.println("Requested GNSS fix.");
+    } else {
+        Serial.println("Error: Could not request GNSS fix.");
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -456,7 +479,8 @@ bool attemptGNSSFix()
  *
  * @return true if the response was received, else false.
  */
-bool waitForResponse(uint8_t* output, size_t& outputLen) {
+bool waitForResponse(uint8_t* output, size_t& outputLen) 
+{
     WalterModemRsp rsp = {};
     uint8_t buffer[274] = {0};
     
@@ -480,7 +504,8 @@ bool waitForResponse(uint8_t* output, size_t& outputLen) {
  * @brief This functions connects to the LTE network and creates / refreshes the CoAP context.
  * @return true if the CoAP context could be created, false if not.
  */
-bool coapConnect() {
+bool coapConnect() 
+{
     /* Enable LTE network and create CoAP context. */
     if (!isLteConnected() && !lteConnect()) {
         return false;
@@ -497,17 +522,16 @@ bool coapConnect() {
 }
 
 /**
- * @brief This function performas a CoAP POST request on the given resource.
+ * @brief This function performas a CoAP POST request on the given resource. Response is not awaited, the function does simple fire & forget.
  *
  * @param resource Name of the resource to be connected to.
  * @param data Pointer to the data sent in this request.
  * @param dataLen Size of the dataset sent in this request.
- * @param output Pointer to the output buffer the data are written to.
- * @param outputLen Size of the output data.
  *
  * @return true if the request was successful, else false.
  */
-bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen, uint8_t* output, size_t& outputLen) {    
+bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen) 
+{    
     if (!coapConnect()) {
         return false;
     }
@@ -520,18 +544,19 @@ bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen, uint8_
         return false;
     }
 
-    return waitForResponse(output, outputLen);
+    return true;
 }
 
 /**
- * @brief This function performas a CoAP POST request on the given resource.
+ * @brief This function performas a CoAP GET request on the given resource.
  *
  * @param output Pointer to the output buffer the data are written to.
  * @param outputLen Size of the output data.
  *
  * @return true if the request was successful, else false.
  */
-bool coapRequestGet(const char* resource, uint8_t* output, size_t& outputLen) {
+bool coapRequestGet(const char* resource, uint8_t* output, size_t& outputLen) 
+{
     if (!coapConnect()) {
         return false;
     }
@@ -547,8 +572,8 @@ bool coapRequestGet(const char* resource, uint8_t* output, size_t& outputLen) {
     return waitForResponse(output, outputLen);
 }
 
-void setup() {
-
+void setup() 
+{
     /* Startup serial output */
     Serial.begin(115200);
     delay(5000);
@@ -579,67 +604,87 @@ void setup() {
     modem.gnssSetEventHandler(gnssEventHandler, NULL);
 }
 
-void loop() {
-
-    /*size_t len;
-
-    if (requestGet("command", incomingBuf, len)) {
-        Serial.print("Successfully sent GET: ");
-
-        for (size_t i = 0; i < len; ++i) {
-            if (incomingBuf[i] < 0x10) Serial.print('0');
-            Serial.print(incomingBuf[i], HEX);
-        }
-
-        Serial.println("");
-
-        std::vector<uint8_t> data(incomingBuf, incomingBuf + len);
-        Messages::Command c = Messages::Command::init(data);
-
-        if (!c.verify("test")) {
-            Serial.println("Verification of the incoming command failed.");
-        } else {
-            Serial.println("Verification of the incoming command successful!");
-        }
-    }  else {
-        Serial.println("Could not send GET");
-    }
-
+void loop() 
+{
     if (counterCmdUpd == WT_INTERVAL_CMD_UPDATE) {
         Serial.println("Checking for Command Updates ...");
         
+        size_t len;
+        if (coapRequestGet("command", incomingBuf, len)) {
+            std::vector<uint8_t> data(incomingBuf, incomingBuf + len);
+            Messages::Command c = Messages::Command::init(data);
+
+            Serial.println("Got command from server. Processing ...");
+
+            if (c.verify(WT_CFG_SECRET)) {
+                Serial.println("Command processed successfully.");
+            } else {
+                Serial.println("Error: Verification of the incoming command failed.");
+            }
+        }
+
         counterCmdUpd = 0;
     } else {
         counterCmdUpd++;
-    }*/
+    }
 
     if (counterGnssUpd == WT_INTERVAL_GNSS_UPDATE) {
-        Serial.println("Performing GNSS Update ...");
+        if (gnssFixNumSatellites < 1) {
+            Serial.println("Looking for GNSS satellites ...");
+            
+            do
+            {
+                Messages::Position position;
+                position.setHeader(false, gnssFixNumSatellites);
+                position.interval = WT_INTERVAL_GNSS_UPDATE;
+                memcpy(position.device, macBuf, 6);
+                position.name = WT_CFG_NAME;
 
-        Messages::Position position;
-        position.interval = WT_INTERVAL_GNSS_UPDATE;
-        memcpy(position.device, macBuf, 6);
-        position.name = WT_CFG_NAME;
+                std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
+                if (coapRequestPost("position", &data[0], data.size())) {
+                    Serial.println("Sent position data update successfully.");
+                } else {
+                    Serial.println("Error: Could not send position data update.");
+                }
+            }
+            while(!waitForInitialGnssFix());
+        } else {
+            Serial.println("Sending GNSS data update ...");
 
-        if(attemptGNSSFix()) {
+            Messages::Position position;
             position.setHeader(true, gnssFixNumSatellites);
+            position.interval = WT_INTERVAL_GNSS_UPDATE;
+            memcpy(position.device, macBuf, 6);
+            position.name = WT_CFG_NAME;
             position.latitude = latestGnssFix.latitude;
             position.longitude = latestGnssFix.longitude;
-        } else {
-            position.setHeader(false, gnssFixNumSatellites);
-        }
 
-        size_t len;
-        std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
-        if (coapRequestPost("position", &data[0], data.size(), incomingBuf, len)) {
-            Serial.println("Sent GNSS data update successfully.");
-        } else {
-            Serial.println("Error: Could not send GNSS data update.");
+            std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
+            if (coapRequestPost("position", &data[0], data.size())) {
+                Serial.println("Sent GNSS data update successfully.");
+            } else {
+                Serial.println("Error: Could not send GNSS data update.");
+            }
+            
+            if (gnssFixRcvd) {
+                Serial.println("Performing GNSS Update ...");
+
+                /* Request a new GNSS fix. IMPORTANT: Wait for around 5s here as the LTE signals may disturb GNSS signals and prevent a new fix! */
+                requestGnssFix();
+                delay(5000);
+            }
         }
 
         counterGnssUpd = 0;
     } else {
         counterGnssUpd++;
+    }
+
+    if (gnssFixTimeoutCounter++ >= MAX_GNSS_FIX_DURATION_SECONDS) {
+        Serial.println("\r\nGNSS fix timeout. Restarting ESP ...");
+
+        delay(1000);
+        ESP.restart();
     }
 
     delay(1000);
