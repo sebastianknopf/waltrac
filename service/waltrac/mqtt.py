@@ -55,7 +55,10 @@ class MqttPublisher:
                     logging.info("Connected to MQTT broker.")
 
                     self._connected.set()
-                    await client.disconnected()
+                    
+                    while True:
+                        await asyncio.sleep(10)
+                        await client.ping()
 
             except asyncio.CancelledError:
                 raise
