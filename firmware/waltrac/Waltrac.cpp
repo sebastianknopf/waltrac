@@ -6,13 +6,13 @@ WalterModemGNSSFix latestGnssFix = {};
 
 volatile bool gnssFixRcvd = false;
 volatile uint8_t gnssFixNumSatellites = 0;
+volatile uint32_t gnssFixDurationSeconds = 0;
 
 uint8_t macBuf[6] = {0};
 uint8_t incomingBuf[274] = {0};
 
-uint8_t counterCmdUpd = 0;
-uint8_t counterGnssUpd = 0;
-uint32_t gnssFixTimeoutCounter = 0;
+uint8_t cntMntInv = 0;
+uint8_t cntMntCmd = (60 / WT_CFG_INTERVAL);
 
 bool waitForNetwork()
 {
@@ -21,7 +21,7 @@ bool waitForNetwork()
     while (!isLteConnected()) {
         delay(1000);
 
-        if (++timeout > 300) {
+        if (timeout++ >= MAX_NETWORK_TIMEOUT_SECONDS) {
             Serial.println("Error: Network connection timeout reached.");
             return false;
         }
@@ -265,7 +265,7 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
     
     Serial.printf("Received GNSS fix to %.06f, %.06f with %d satellites.\r\n", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
 
-    gnssFixTimeoutCounter = 0;
+    gnssFixDurationSeconds = 0;
     gnssFixRcvd = true;
 }
 
@@ -285,7 +285,8 @@ bool waitForInitialGnssFix()
         while(!gnssFixRcvd) {
             delay(1000);
 
-            if (gnssFixTimeoutCounter++ >= MAX_GNSS_FIX_DURATION_SECONDS) {
+            // restart the ESP when there're more than 5 minutes passed without a valid GNSS signal
+            if (gnssFixDurationSeconds++ >= 300) {
                 Serial.println("\r\nGNSS fix timeout. Restarting ESP ...");
 
                 delay(1000);
@@ -298,7 +299,7 @@ bool waitForInitialGnssFix()
             Serial.printf("GNSS is available, found %d satellites.\r\n", gnssFixNumSatellites);
             return true;
         } else {
-            Serial.printf("GNSS fix confidence %.02f too low, found %d satellites, retrying ...\r\n", gnssFixNumSatellites);
+            Serial.printf("GNSS fix confidence %.02f too low, found %d satellites, retrying ...\r\n", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
         }
     }
 
@@ -306,15 +307,37 @@ bool waitForInitialGnssFix()
     return false; 
 }
 
+void delayUntilGnssFixReceived(uint32_t timeout) 
+{
+    uint32_t cntMntTimeout = 0;
+    while (!gnssFixRcvd && cntMntTimeout < timeout) {
+        delay(100);
+        cntMntTimeout += 100;
+    }
+}
+
 bool requestGnssFix()
 {
     initAndConfigureGnss();
     
     gnssFixRcvd = false;
-    if(modem.gnssPerformAction()) {
+    if(modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_GET_SINGLE_FIX)) {
         Serial.println("Requested GNSS fix.");
     } else {
         Serial.println("Error: Could not request GNSS fix.");
+        return false;
+    }
+
+    return true;
+}
+
+bool cancelGnssFix()
+{
+    gnssFixRcvd = false;
+    if (modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_CANCEL)) {
+        Serial.println("Cancelled GNSS fix.");
+    } else {
+        Serial.println("Error: Could not cancel GNSS fix.");
         return false;
     }
 

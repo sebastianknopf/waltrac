@@ -15,6 +15,11 @@
 #define COAP_TIMEOUT_SECONDS 30
 
 /**
+ * @brief Network timeout for connecting.
+ */
+#define MAX_NETWORK_TIMEOUT_SECONDS 60
+
+/**
  * @brief All fixes with a confidence below this number are considered ok.
  */
 #define MAX_GNSS_CONFIDENCE 200.0
@@ -25,9 +30,9 @@
 #define MAX_GNSS_FIX_ATTEMPTS 3
 
 /**
- * @brief Maximum number of seconds a GNSS fix may take. If the fix exceeds this limit, the ESP should be restarted.
+ * @brief Maximum number of seconds a GNSS fix may take. If the fix exceeds this limit, the fix should be cancelled.
  */
-#define MAX_GNSS_FIX_DURATION_SECONDS 300
+#define MAX_GNSS_FIX_DURATION_SECONDS 30
 
 /**
  * @brief The modem instance.
@@ -50,6 +55,11 @@ extern volatile bool gnssFixRcvd;
 extern volatile uint8_t gnssFixNumSatellites;
 
 /**
+ * @brief The duration counter for maintaining GNSS timeouts.
+ */
+extern volatile uint32_t gnssFixDurationSeconds;
+
+/**
  * @brief The buffer for the MAC adress to be stored.
  */
 extern uint8_t macBuf[6];
@@ -60,19 +70,14 @@ extern uint8_t macBuf[6];
 extern uint8_t incomingBuf[274];
 
 /**
- * @brief The counter for maintaining dynamic command update interval.
+ * @brief The counter for maintaining dynamic interval.
  */
-extern uint8_t counterCmdUpd;
+extern uint8_t cntMntInv;
 
 /**
- * @brief The counter for maintaining dynamic GNSS update interval.
+ * @brief The counter for maintaining command update interval.
  */
-extern uint8_t counterGnssUpd;
-
-/**
- * @brief The counter for maintaining GNSS timeouts.
- */
-extern uint32_t gnssFixTimeoutCounter;
+extern uint8_t cntMntCmd;
 
 /**
  * @brief This function waits for the modem to be connected to the Lte network.
@@ -180,10 +185,22 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args);
 bool waitForInitialGnssFix();
 
 /**
+ * @brief This function delays until the timeout is reached OR a GNSS fix received.
+ * @return None.
+ */
+void delayUntilGnssFixReceived(uint32_t timeout);
+
+/**
  * @brief This function requests a single GNSS fix.
  * @return true if the fix could be requested, else false.
  */
 bool requestGnssFix();
+
+/**
+ * @brief This function cancels a single GNSS fix.
+ * @return true if the fix could be cancelled, else false.
+ */
+bool cancelGnssFix();
 
 /**
  * @brief This function waits for a CoAP response and writes the data to the supplied buffer.

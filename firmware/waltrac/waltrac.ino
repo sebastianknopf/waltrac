@@ -40,7 +40,10 @@ void setup()
 
 void loop() 
 {
-    if (counterCmdUpd == WT_INTERVAL_CMD_UPDATE) {
+    uint64_t procDurationStart = millis();
+
+    // update Command from server once per minute
+    if (cntMntCmd >= (60 / WT_CFG_INTERVAL)) {
         Serial.println("Checking for Command Updates ...");
         
         size_t len;
@@ -57,69 +60,82 @@ void loop()
             }
         }
 
-        counterCmdUpd = 0;
+        cntMntCmd = 0;
     } else {
-        counterCmdUpd++;
+        cntMntCmd++;
     }
 
-    if (counterGnssUpd == WT_INTERVAL_GNSS_UPDATE) {
-        if (gnssFixNumSatellites < 1) {
-            Serial.println("Looking for GNSS satellites ...");
-            
-            do
-            {
-                Messages::Position position;
-                position.setHeader(false, gnssFixNumSatellites);
-                position.interval = WT_INTERVAL_GNSS_UPDATE;
-                memcpy(position.device, macBuf, 6);
-                position.name = WT_CFG_NAME;
-
-                std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
-                if (coapRequestPost("position", &data[0], data.size())) {
-                    Serial.println("Sent position data update successfully.");
-                } else {
-                    Serial.println("Error: Could not send position data update.");
-                }
-            }
-            while(!waitForInitialGnssFix());
-        } else {
-            Serial.println("Sending GNSS data update ...");
-
+    // send GNSS data update
+    if (gnssFixNumSatellites < 1) {
+        Serial.println("Looking for GNSS satellites ...");
+        
+        do
+        {
             Messages::Position position;
-            position.setHeader(true, gnssFixNumSatellites);
-            position.interval = WT_INTERVAL_GNSS_UPDATE;
+            position.setHeader(false, gnssFixNumSatellites);
+            position.interval = WT_CFG_INTERVAL;
             memcpy(position.device, macBuf, 6);
             position.name = WT_CFG_NAME;
-            position.latitude = latestGnssFix.latitude;
-            position.longitude = latestGnssFix.longitude;
 
             std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
             if (coapRequestPost("position", &data[0], data.size())) {
-                Serial.println("Sent GNSS data update successfully.");
+                Serial.println("Sent position data update successfully.");
             } else {
-                Serial.println("Error: Could not send GNSS data update.");
-            }
-            
-            if (gnssFixRcvd) {
-                Serial.println("Performing GNSS Update ...");
-
-                /* Request a new GNSS fix. IMPORTANT: Wait for around 5s here as the LTE signals may disturb GNSS signals and prevent a new fix! */
-                requestGnssFix();
-                delay(5000);
+                Serial.println("Error: Could not send position data update.");
             }
         }
-
-        counterGnssUpd = 0;
+        while(!waitForInitialGnssFix());
     } else {
-        counterGnssUpd++;
+        Serial.println("Sending GNSS data update ...");
+
+        Messages::Position position;
+        position.setHeader(true, gnssFixNumSatellites);
+        position.interval = WT_CFG_INTERVAL;
+        memcpy(position.device, macBuf, 6);
+        position.name = WT_CFG_NAME;
+        position.latitude = latestGnssFix.latitude;
+        position.longitude = latestGnssFix.longitude;
+
+        std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
+        if (coapRequestPost("position", &data[0], data.size())) {
+            Serial.println("Sent GNSS data update successfully.");
+        } else {
+            Serial.println("Error: Could not send GNSS data update.");
+        }
+        
+        if (gnssFixRcvd) {
+            Serial.println("Performing GNSS Update ...");
+
+            /* Request a new GNSS fix. */
+            requestGnssFix();
+            delayUntilGnssFixReceived(7500);
+        }
     }
 
-    if (gnssFixTimeoutCounter++ >= MAX_GNSS_FIX_DURATION_SECONDS) {
-        Serial.println("\r\nGNSS fix timeout. Restarting ESP ...");
+    // monitor last GNSS fix, cancel and restart GNSS fix if timed out
+    if (gnssFixDurationSeconds >= MAX_GNSS_FIX_DURATION_SECONDS) {
+        Serial.println("\r\nGNSS fix timeout. Restarting GNSS fix ...");
 
-        delay(1000);
-        ESP.restart();
+        /* Cancel current fix and request a new GNSS fix. */
+        cancelGnssFix();
+        requestGnssFix();
+        delayUntilGnssFixReceived(7500);
     }
 
-    delay(1000);
+    // monitor elapsed time and wait until next interval
+    uint32_t procElapsedTime = millis() - procDurationStart;
+    int32_t procRemainingTime = WT_CFG_INTERVAL * 1000 - procElapsedTime;
+    if (procRemainingTime < 0) {
+        procRemainingTime = 0;
+    }
+
+    uint32_t procElapsedSeconds = procElapsedTime / 1000;
+    if (procElapsedSeconds > WT_CFG_INTERVAL) {
+        gnssFixDurationSeconds += procElapsedSeconds;
+    } else {
+        gnssFixDurationSeconds += WT_CFG_INTERVAL;
+    }
+
+    Serial.printf("Waiting %dms for next interval ...\r\n", procRemainingTime);
+    delay(procRemainingTime);
 }
