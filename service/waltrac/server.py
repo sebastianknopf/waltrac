@@ -107,7 +107,7 @@ async def run(secret: str, mqtt: str, host: str, port: int) -> None:
 
         await Context.create_server_context(root, bind=(host, port))
 
-        logging.info(f"CoAP Server listening on {host}:{port}")
+        logging.info(f"CoAP Server listening on {host}:{port}.")
         await asyncio.get_running_loop().create_future()
     except KeyboardInterrupt:
         logging.info("Shutting down server...")
