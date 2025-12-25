@@ -17,7 +17,7 @@ void setup()
 
     /* Get the MAC address for board validation */
     esp_read_mac(macBuf, ESP_MAC_WIFI_STA);
-    ESP_LOGI("WaltracSetup", "%02X:%02X:%02X:%02X:%02X:%02X\r\n", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
+    ESP_LOGI("WaltracSetup", "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
 
     /* Open serial connection to modem */
     if (WalterModem::begin(&Serial2)) {
@@ -125,6 +125,6 @@ void loop()
         gnssFixDurationSeconds += WT_CFG_INTERVAL;
     }
 
-    ESP_LOGI("WaltracMain", "Waiting %dms for next interval ...\r\n", procRemainingTime);
+    ESP_LOGI("WaltracMain", "Waiting %dms for next interval ...", procRemainingTime);
     delay(procRemainingTime);
 }

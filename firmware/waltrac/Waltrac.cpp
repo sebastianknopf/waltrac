@@ -118,7 +118,7 @@ bool checkAssistanceStatus(WalterModemRsp* rsp, bool* updateAlmanac, bool* updat
     auto reportAndSetUpdateFlag = [](const char* name, const auto& data, bool* updateFlag) {
         //Serial.printf("%s data is ", name);
         if(data.available) {
-            //Serial.printf("available and should be updated within %ds.\r\n", data.timeToUpdate);
+            //Serial.printf("available and should be updated within %ds.", data.timeToUpdate);
             if(updateFlag) {
                 *updateFlag = (data.timeToUpdate <= 0);
             }
@@ -209,7 +209,7 @@ bool validateGNSSClock(WalterModemRsp* rsp)
         /* Validate the GNSS subsystem clock */
         modem.gnssGetUTCTime(rsp);
         if(rsp->data.clock.epochTime > 4) {
-            ESP_LOGI("Waltrac", "System clock synchronized to UNIX timestamp %" PRIi64 ".\r\n", rsp->data.clock.epochTime);
+            ESP_LOGI("Waltrac", "System clock synchronized to UNIX timestamp %" PRIi64 ".", rsp->data.clock.epochTime);
             return true;
         }
 
@@ -265,7 +265,7 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
         }
     }
     
-    ESP_LOGI("Waltrac", "Received GNSS fix to %.06f, %.06f with %d satellites.\r\n", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
+    ESP_LOGI("Waltrac", "Received GNSS fix to %.06f, %.06f with %d satellites.", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
 
     gnssFixDurationSeconds = 0;
     gnssFixRcvd = true;
@@ -285,7 +285,7 @@ bool waitForInitialGnssFix()
             return false;
         }
 
-        ESP_LOGI("Waltrac", "Waiting for GNSS lookup attempt %d/%d\r\n", (i + 1), maxGnssFixAttempts);
+        ESP_LOGI("Waltrac", "Waiting for GNSS lookup attempt %d/%d ...", (i + 1), maxGnssFixAttempts);
         while(!gnssFixRcvd) {
             delay(1000);
 
@@ -300,10 +300,10 @@ bool waitForInitialGnssFix()
 
         /* If confidence is acceptable, stop trying. Otherwise, try again */
         if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
-            ESP_LOGI("Waltrac", "GNSS is available, found %d satellites.\r\n", gnssFixNumSatellites);
+            ESP_LOGI("Waltrac", "GNSS is available, found %d satellites.", gnssFixNumSatellites);
             return true;
         } else {
-            ESP_LOGI("Waltrac", "GNSS fix confidence %.02f too low, found %d satellites, retrying ...\r\n", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
+            ESP_LOGI("Waltrac", "GNSS fix confidence %.02f too low, found %d satellites, retrying ...", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
         }
     }
 
@@ -320,7 +320,7 @@ void waitForGnssFixOrCancel(uint32_t timeout)
     }
 
     if (gnssFixRcvd) {
-        ESP_LOGD("Waltrac", "GNSS fix took about %dms.\r\n", cntMntTimeout);
+        ESP_LOGD("Waltrac", "GNSS fix took about %dms.", cntMntTimeout);
     } else {
         ESP_LOGW("Waltrac", "GNSS fix timeout. Cancelling GNSS fix ...");
         
