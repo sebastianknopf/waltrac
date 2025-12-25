@@ -158,12 +158,6 @@ bool updateGNSSAssistance(WalterModemRsp* rsp);
 bool validateGNSSClock(WalterModemRsp* rsp);
 
 /**
- * @brief This function checks al pre conditions and enables GNSS quick fix, if last fix was valid.
- * @return true if the configuration succeeded, else false.
- */
-bool initAndConfigureGnss();
-
-/**
  * @brief GNSS event handler
  *
  * Handles GNSS fix events.

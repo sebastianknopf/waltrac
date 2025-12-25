@@ -220,8 +220,26 @@ bool validateGNSSClock(WalterModemRsp* rsp)
     return false;
 }
 
-bool initAndConfigureGnss() 
+void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
 {
+    latestGnssFix = *fix;
+
+    /* Count satellites with good signal strength */
+    gnssFixNumSatellites = 0;
+    for(int i = 0; i < latestGnssFix.satCount; ++i) {
+        if(latestGnssFix.sats[i].signalStrength >= 30) {
+            gnssFixNumSatellites++;
+        }
+    }
+    
+    ESP_LOGI("Waltrac", "Received GNSS fix to %.06f, %.06f with %d satellites after %ds.", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites, gnssFixDurationSeconds);
+
+    gnssFixDurationSeconds = 0;
+    gnssFixRcvd = true;
+}
+
+bool waitForInitialGnssFix() 
+{    
     WalterModemRsp rsp = {};
 
     if(!validateGNSSClock(&rsp)) {
@@ -239,43 +257,6 @@ bool initAndConfigureGnss()
         ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
-
-    /* Optional: Reconfigure GNSS with last valid fix - This might speed up consecutive fixes */
-    if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
-        /* Reconfigure GNSS for potential quick fix */
-        if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_HIGH, WALTER_MODEM_GNSS_ACQ_MODE_HOT_START)) {
-            ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
-        } else {
-            ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
-        }
-    }
-
-    return true;
-}
-
-void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
-{
-    latestGnssFix = *fix;
-
-    /* Count satellites with good signal strength */
-    gnssFixNumSatellites = 0;
-    for(int i = 0; i < latestGnssFix.satCount; ++i) {
-        if(latestGnssFix.sats[i].signalStrength >= 30) {
-            gnssFixNumSatellites++;
-        }
-    }
-    
-    ESP_LOGI("Waltrac", "Received GNSS fix to %.06f, %.06f with %d satellites.", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
-
-    gnssFixDurationSeconds = 0;
-    gnssFixRcvd = true;
-}
-
-bool waitForInitialGnssFix() 
-{    
-    if(!initAndConfigureGnss()) {
-        return false;
-    }
     
     const uint8_t maxGnssFixAttempts = MAX_GNSS_FIX_ATTEMPTS;
     for (uint8_t i = 0; i < maxGnssFixAttempts; i++) {
@@ -291,7 +272,7 @@ bool waitForInitialGnssFix()
 
             // restart the ESP when there're more than 5 minutes passed without a valid GNSS signal
             if (gnssFixDurationSeconds++ >= 300) {
-                ESP_LOGI("Waltrac", "GNSS fix timeout. Restarting ESP ...");
+                ESP_LOGI("Waltrac", "GNSS fix timeout after %ds. Restarting ESP ...", gnssFixDurationSeconds);
 
                 delay(1000);
                 ESP.restart();
@@ -357,10 +338,12 @@ bool attemptGnssFix(uint32_t numAttempts)
             delay(1000);
 
             if (gnssFixDurationSeconds++ >= MAX_GNSS_FIX_DURATION_SECONDS) {
-                ESP_LOGW("Waltrac", "GNSS fix timeout. Cancelling GNSS fix ...");
+                ESP_LOGW("Waltrac", "GNSS fix timeout after %ds. Cancelling GNSS fix ...", gnssFixDurationSeconds);
 
                 if (modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_CANCEL)) {
                     ESP_LOGD("Waltrac", "Cancelled GNSS fix.");
+                    
+                    delay(1000);
                 } else {
                     ESP_LOGE("Waltrac", "Could not cancel GNSS fix. Restarting ESP ...");
 
@@ -379,7 +362,7 @@ bool attemptGnssFix(uint32_t numAttempts)
         }
     }
 
-    ESP_LOGE("Waltrac", "Could not succeed initial GNSS fix.");
+    ESP_LOGE("Waltrac", "Could not succeed GNSS fix.");
     return false;
 }
 
