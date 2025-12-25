@@ -32,7 +32,7 @@
 /**
  * @brief Maximum number of seconds a GNSS fix may take. If the fix exceeds this limit, the fix should be cancelled.
  */
-#define MAX_GNSS_FIX_DURATION_SECONDS 30
+#define MAX_GNSS_FIX_DURATION_SECONDS 60
 
 /**
  * @brief The modem instance.
@@ -185,22 +185,13 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args);
 bool waitForInitialGnssFix();
 
 /**
- * @brief This function waits for a GNSS fix to receive or cancels the current GNSS fix for.
- * @return None.
+ * @brief This function runs the number of GNSS fixes specified by the given parameter.
+ *
+ * @param numAttempts The number of attempts to try.
+ *
+ * @return true if a valid GNSS fix was found, else false
  */
-void waitForGnssFixOrCancel(uint32_t timeout);
-
-/**
- * @brief This function requests a single GNSS fix.
- * @return true if the fix could be requested, else false.
- */
-bool requestGnssFix();
-
-/**
- * @brief This function cancels a single GNSS fix.
- * @return true if the fix could be cancelled, else false.
- */
-bool cancelGnssFix();
+bool attemptGnssFix(uint32_t numAttempts = MAX_GNSS_FIX_ATTEMPTS);
 
 /**
  * @brief This function waits for a CoAP response and writes the data to the supplied buffer.

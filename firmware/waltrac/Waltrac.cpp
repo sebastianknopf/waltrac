@@ -311,60 +311,76 @@ bool waitForInitialGnssFix()
     return false; 
 }
 
-void waitForGnssFixOrCancel(uint32_t timeout) 
+bool attemptGnssFix(uint32_t numAttempts)
 {
-    uint32_t cntMntTimeout = 0;
-    while (!gnssFixRcvd && cntMntTimeout < timeout) {
-        delay(100);
-        cntMntTimeout += 100;
+    if (numAttempts > MAX_GNSS_FIX_ATTEMPTS) {
+        numAttempts = MAX_GNSS_FIX_ATTEMPTS;
     }
 
-    if (gnssFixRcvd) {
-        ESP_LOGD("Waltrac", "GNSS fix took about %dms.", cntMntTimeout);
-    } else {
-        ESP_LOGW("Waltrac", "GNSS fix timeout. Cancelling GNSS fix ...");
-        
-        cancelGnssFix();
-        delay(500);
-    }
-}
+    WalterModemRsp rsp = {};
 
-bool requestGnssFix()
-{
-    if(!initAndConfigureGnss()) {
-        return false;
-    }
-    
-    gnssFixRcvd = false;
-    if(modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_GET_SINGLE_FIX)) {
-        ESP_LOGD("Waltrac", "Requested GNSS fix.");
-    } else {
-        ESP_LOGE("Waltrac", "Could not request GNSS fix.");
+    if(!validateGNSSClock(&rsp)) {
+        ESP_LOGE("Waltrac", "Could not validate GNSS clock.");
         return false;
     }
 
-    return true;
-}
+    /* Ensure assistance data is current */
+    if(!updateGNSSAssistance(&rsp)) {
+        ESP_LOGW("Waltrac", "Could not update GNSS assistance data. Continuing without assistance.");
+    }
 
-bool cancelGnssFix()
-{
     /* Disconnect from the network (Required for GNSS) */
     if(isLteConnected() && !lteDisconnect()) {
         ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
-    
-    gnssFixRcvd = false;
-    if (modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_CANCEL)) {
-        ESP_LOGD("Waltrac", "Cancelled GNSS fix.");
-    } else {
-        ESP_LOGE("Waltrac", "Could not cancel GNSS fix. Restarting ESP ...");
 
-        delay(500);
-        ESP.restart();
+    for (uint8_t i = 0; i < numAttempts; i++) {
+        /* Optional: Reconfigure GNSS with last valid fix - This might speed up consecutive fixes */
+        if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
+            /* Reconfigure GNSS for potential quick fix */
+            if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_HIGH, WALTER_MODEM_GNSS_ACQ_MODE_HOT_START)) {
+                ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
+            } else {
+                ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
+            }
+        }
+        
+        gnssFixRcvd = false;
+        if(!modem.gnssPerformAction()) {
+            ESP_LOGE("Waltrac", "Could not request GNSS fix.");
+            return false;
+        }
+
+        ESP_LOGI("Waltrac", "Waiting for GNSS fix attempt %d/%d ...", (i + 1), numAttempts);
+        while(!gnssFixRcvd) {
+            delay(1000);
+
+            if (gnssFixDurationSeconds++ >= MAX_GNSS_FIX_DURATION_SECONDS) {
+                ESP_LOGW("Waltrac", "GNSS fix timeout. Cancelling GNSS fix ...");
+
+                if (modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_CANCEL)) {
+                    ESP_LOGD("Waltrac", "Cancelled GNSS fix.");
+                } else {
+                    ESP_LOGE("Waltrac", "Could not cancel GNSS fix. Restarting ESP ...");
+
+                    delay(500);
+                    ESP.restart();
+                }
+            }
+        }
+
+        /* If confidence is acceptable, stop trying. Otherwise, try again */
+        if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
+            ESP_LOGI("Waltrac", "GNSS fix acceptable with confidence %.02f, found %d satellites.", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
+            return true;
+        } else {
+            ESP_LOGI("Waltrac", "GNSS fix confidence %.02f too low, found %d satellites, retrying ...", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
+        }
     }
 
-    return true;
+    ESP_LOGE("Waltrac", "Could not succeed initial GNSS fix.");
+    return false;
 }
 
 bool waitForResponse(uint8_t* output, size_t& outputLen) 

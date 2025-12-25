@@ -107,8 +107,7 @@ void loop()
         ESP_LOGI("WaltracMain", "Performing GNSS Update ...");
 
         /* Request a new GNSS fix. */
-        requestGnssFix();
-        waitForGnssFixOrCancel((WT_CFG_INTERVAL * 1000));
+        attemptGnssFix();
     }
 
     // monitor elapsed time and wait until next interval
