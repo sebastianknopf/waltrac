@@ -1,3 +1,5 @@
+#include <esp_log.h>
+
 #include "WaltracConfig.h"
 #include "Waltrac.h"
 
@@ -22,45 +24,46 @@ bool waitForNetwork()
         delay(1000);
 
         if (timeout++ >= MAX_NETWORK_TIMEOUT_SECONDS) {
-            Serial.println("Error: Network connection timeout reached.");
+            ESP_LOGE("Waltrac", "Network connection timeout reached.");
             return false;
         }
     }
 
-    Serial.println("Connected to the network.");
+    ESP_LOGI("Waltrac", "Connected to the network.");
     return true;
 }
 
 bool lteConnect() 
 {
+    /* Set operational state */
     if (modem.setOpState(WALTER_MODEM_OPSTATE_NO_RF)) {
-        Serial.println("Successfully set operational state to NO RF.");
+        ESP_LOGD("Waltrac", "Successfully set operational state to NO RF.");
     } else {
-        Serial.println("Error: Could not set operational state to NO RF.");
+        ESP_LOGE("Waltrac", "Could not set operational state to NO RF.");
         return false;
     }
 
     /* Create PDP context */
     if (modem.definePDPContext()) {
-        Serial.println("Created PDP context.");
+        ESP_LOGD("Waltrac", "Created PDP context.");
     } else {
-        Serial.println("Error: Could not create PDP context.");
+        ESP_LOGE("Waltrac", "Could not create PDP context.");
         return false;
     }
 
     /* Set the operational state to full */
     if (modem.setOpState(WALTER_MODEM_OPSTATE_FULL)) {
-        Serial.println("Successfully set operational state to FULL.");
+        ESP_LOGD("Waltrac", "Successfully set operational state to FULL.");
     } else {
-        Serial.println("Error: Could not set operational state to FULL.");
+        ESP_LOGE("Waltrac", "Could not set operational state to FULL.");
         return false;
     }
 
     /* Set the network operator selection to automatic */
     if (modem.setNetworkSelectionMode(WALTER_MODEM_NETWORK_SEL_MODE_AUTOMATIC)) {
-        Serial.println("Network selection mode to was set to AUTOMATIC.");
+        ESP_LOGD("Waltrac", "Network selection mode to was set to AUTOMATIC.");
     } else {
-        Serial.println("Error: Could not set the network selection mode to AUTOMATIC.");
+        ESP_LOGE("Waltrac", "Could not set the network selection mode to AUTOMATIC.");
         return false;
     }
 
@@ -77,9 +80,9 @@ bool lteDisconnect()
 {
     /* Set the operational state to minimum */
     if(modem.setOpState(WALTER_MODEM_OPSTATE_MINIMUM)) {
-        Serial.println("Successfully set operational state to MINIMUM.");
+        ESP_LOGD("Waltrac", "Successfully set operational state to MINIMUM.");
     } else {
-        Serial.println("Error: Could not set operational state to MINIMUM.");
+        ESP_LOGE("Waltrac", "Could not set operational state to MINIMUM.");
         return false;
     }
 
@@ -90,7 +93,7 @@ bool lteDisconnect()
         regState = modem.getNetworkRegState();
     }
 
-    Serial.println("Disconnected from the network.");
+    ESP_LOGD("Waltrac", "Disconnected from the network.");
     return true;
 }
 
@@ -98,7 +101,7 @@ bool checkAssistanceStatus(WalterModemRsp* rsp, bool* updateAlmanac, bool* updat
 {
     /* Check assistance data status */
     if(!modem.gnssGetAssistanceStatus(rsp) ||  rsp->type != WALTER_MODEM_RSP_DATA_TYPE_GNSS_ASSISTANCE_DATA) {
-        Serial.println("Could not request GNSS assistance status");
+        ESP_LOGE("Waltrac", "Could not request GNSS assistance status");
         return false;
     }
 
@@ -113,14 +116,14 @@ bool checkAssistanceStatus(WalterModemRsp* rsp, bool* updateAlmanac, bool* updat
 
     /* Lambda to reduce repetition for each data type */
     auto reportAndSetUpdateFlag = [](const char* name, const auto& data, bool* updateFlag) {
-        Serial.printf("%s data is ", name);
+        //Serial.printf("%s data is ", name);
         if(data.available) {
-            Serial.printf("available and should be updated within %ds.\r\n", data.timeToUpdate);
+            //Serial.printf("available and should be updated within %ds.\r\n", data.timeToUpdate);
             if(updateFlag) {
                 *updateFlag = (data.timeToUpdate <= 0);
             }
         } else {
-            Serial.println("not available.");
+            //Serial.println("not available.");
             if(updateFlag) {
                 *updateFlag = true;
             }
@@ -141,7 +144,7 @@ bool updateGNSSAssistance(WalterModemRsp* rsp)
 
     /* Get the latest assistance data */
     if(!checkAssistanceStatus(rsp, &updateAlmanac, &updateEphemeris)) {
-        Serial.println("Error: Could not check GNSS assistance status.");
+        ESP_LOGE("Waltrac", "Could not check GNSS assistance status.");
         return false;
     }
 
@@ -158,9 +161,9 @@ bool updateGNSSAssistance(WalterModemRsp* rsp)
     /* Update almanac data if needed */
     if(updateAlmanac) {
         if(modem.gnssUpdateAssistance(WALTER_MODEM_GNSS_ASSISTANCE_TYPE_ALMANAC)) {
-            Serial.println("Almanac data updated successfully.");
+            ESP_LOGD("Waltrac", "Almanac data updated successfully.");
         } else {
-            Serial.println("Error: Almanac data could not be updated.");
+            ESP_LOGE("Waltrac", "Almanac data could not be updated.");
             return false;
         }
     }
@@ -168,21 +171,20 @@ bool updateGNSSAssistance(WalterModemRsp* rsp)
     /* Update real-time ephemeris data if needed */
     if(updateEphemeris) {
         if(modem.gnssUpdateAssistance(WALTER_MODEM_GNSS_ASSISTANCE_TYPE_REALTIME_EPHEMERIS)) {
-            Serial.println("Realtime ephemeris data updated successfully.");
+            ESP_LOGD("Waltrac", "Realtime ephemeris data updated successfully.");
         } else {
-            Serial.println("Error: Realtime ephemeris data could not be updated.");
+            ESP_LOGE("Waltrac", "Realtime ephemeris data could not be updated.");
             return false;
         }
     }
 
     /* Recheck assistance data to ensure its valid */
     if(!checkAssistanceStatus(rsp)) {
-        Serial.println("Error: Could not check GNSS assistance status.");
+        ESP_LOGD("Waltrac", "Could not check GNSS assistance status.");
         return false;
     }
 
-    Serial.println("Successfully updated GNSS assistance data.");
-
+    ESP_LOGD("Waltrac", "Successfully updated GNSS assistance data.");
     return true;
 }
 
@@ -194,11 +196,11 @@ bool validateGNSSClock(WalterModemRsp* rsp)
         return true;
     }
 
-    Serial.println("System clock invalid, LTE time sync required.");
+    ESP_LOGI("Waltrac", "System clock invalid, LTE time sync required.");
 
     /* Connect to LTE (required for time sync) */
     if(!isLteConnected() && !lteConnect()) {
-        Serial.println("Error: Could not connect to LTE network");
+        ESP_LOGE("Waltrac", "Could not connect to LTE network.");
         return false;
     }
 
@@ -207,14 +209,14 @@ bool validateGNSSClock(WalterModemRsp* rsp)
         /* Validate the GNSS subsystem clock */
         modem.gnssGetUTCTime(rsp);
         if(rsp->data.clock.epochTime > 4) {
-            Serial.printf("System clock synchronized to UNIX timestamp %" PRIi64 ".\r\n", rsp->data.clock.epochTime);
+            ESP_LOGI("Waltrac", "System clock synchronized to UNIX timestamp %" PRIi64 ".\r\n", rsp->data.clock.epochTime);
             return true;
         }
 
         delay(2000);
     }
 
-    Serial.println("Error: Could not sync time with network. Does the network support NITZ?");
+    ESP_LOGE("Waltrac", "Could not sync time with network. Does the network support NITZ?");
     return false;
 }
 
@@ -223,18 +225,18 @@ bool initAndConfigureGnss()
     WalterModemRsp rsp = {};
 
     if(!validateGNSSClock(&rsp)) {
-        Serial.println("Error: Could not validate GNSS clock.");
+        ESP_LOGE("Waltrac", "Could not validate GNSS clock.");
         return false;
     }
 
     /* Ensure assistance data is current */
     if(!updateGNSSAssistance(&rsp)) {
-        Serial.println("Warning: Could not update GNSS assistance data. Continuing without assistance.");
+        ESP_LOGW("Waltrac", "Could not update GNSS assistance data. Continuing without assistance.");
     }
 
     /* Disconnect from the network (Required for GNSS) */
     if(isLteConnected() && !lteDisconnect()) {
-        Serial.println("Error: Could not disconnect from the LTE network.");
+        ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
 
@@ -242,9 +244,9 @@ bool initAndConfigureGnss()
     if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
         /* Reconfigure GNSS for potential quick fix */
         if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_HIGH, WALTER_MODEM_GNSS_ACQ_MODE_HOT_START)) {
-            Serial.println("GNSS reconfigured for potential quick fix.");
+            ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
         } else {
-            Serial.println("Error: Could not reconfigure GNSS for potential quick fix.");
+            ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
         }
     }
 
@@ -263,7 +265,7 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
         }
     }
     
-    Serial.printf("Received GNSS fix to %.06f, %.06f with %d satellites.\r\n", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
+    ESP_LOGI("Waltrac", "Received GNSS fix to %.06f, %.06f with %d satellites.\r\n", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites);
 
     gnssFixDurationSeconds = 0;
     gnssFixRcvd = true;
@@ -271,23 +273,25 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
 
 bool waitForInitialGnssFix() 
 {    
-    initAndConfigureGnss();
+    if(!initAndConfigureGnss()) {
+        return false;
+    }
     
     const uint8_t maxGnssFixAttempts = MAX_GNSS_FIX_ATTEMPTS;
     for (uint8_t i = 0; i < maxGnssFixAttempts; i++) {
         gnssFixRcvd = false;
         if(!modem.gnssPerformAction()) {
-            Serial.println("Error: Could not request GNSS fix.");
+            ESP_LOGE("Waltrac", "Could not request GNSS fix.");
             return false;
         }
 
-        Serial.printf("Waiting for GNSS fix attempt %d/%d\r\n", (i + 1), maxGnssFixAttempts);
+        ESP_LOGI("Waltrac", "Waiting for GNSS lookup attempt %d/%d\r\n", (i + 1), maxGnssFixAttempts);
         while(!gnssFixRcvd) {
             delay(1000);
 
             // restart the ESP when there're more than 5 minutes passed without a valid GNSS signal
             if (gnssFixDurationSeconds++ >= 300) {
-                Serial.println("\r\nGNSS fix timeout. Restarting ESP ...");
+                ESP_LOGI("Waltrac", "GNSS fix timeout. Restarting ESP ...");
 
                 delay(1000);
                 ESP.restart();
@@ -296,14 +300,14 @@ bool waitForInitialGnssFix()
 
         /* If confidence is acceptable, stop trying. Otherwise, try again */
         if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
-            Serial.printf("GNSS is available, found %d satellites.\r\n", gnssFixNumSatellites);
+            ESP_LOGI("Waltrac", "GNSS is available, found %d satellites.\r\n", gnssFixNumSatellites);
             return true;
         } else {
-            Serial.printf("GNSS fix confidence %.02f too low, found %d satellites, retrying ...\r\n", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
+            ESP_LOGI("Waltrac", "GNSS fix confidence %.02f too low, found %d satellites, retrying ...\r\n", latestGnssFix.estimatedConfidence, gnssFixNumSatellites);
         }
     }
 
-    Serial.println("Could not succeed initial GNSS fix.");
+    ESP_LOGE("Waltrac", "Could not succeed initial GNSS fix.");
     return false; 
 }
 
@@ -316,9 +320,9 @@ void waitForGnssFixOrCancel(uint32_t timeout)
     }
 
     if (gnssFixRcvd) {
-        Serial.printf("GNSS fix took about %dms.\r\n", cntMntTimeout);
+        ESP_LOGD("Waltrac", "GNSS fix took about %dms.\r\n", cntMntTimeout);
     } else {
-        Serial.println("Warning: GNSS fix timeout. Cancelling GNSS fix ...");
+        ESP_LOGW("Waltrac", "GNSS fix timeout. Cancelling GNSS fix ...");
         
         cancelGnssFix();
         delay(500);
@@ -327,13 +331,15 @@ void waitForGnssFixOrCancel(uint32_t timeout)
 
 bool requestGnssFix()
 {
-    initAndConfigureGnss();
+    if(!initAndConfigureGnss()) {
+        return false;
+    }
     
     gnssFixRcvd = false;
     if(modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_GET_SINGLE_FIX)) {
-        Serial.println("Requested GNSS fix.");
+        ESP_LOGD("Waltrac", "Requested GNSS fix.");
     } else {
-        Serial.println("Error: Could not request GNSS fix.");
+        ESP_LOGE("Waltrac", "Could not request GNSS fix.");
         return false;
     }
 
@@ -344,18 +350,18 @@ bool cancelGnssFix()
 {
     /* Disconnect from the network (Required for GNSS) */
     if(isLteConnected() && !lteDisconnect()) {
-        Serial.println("Error: Could not disconnect from the LTE network.");
+        ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
     
     gnssFixRcvd = false;
     if (modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_CANCEL)) {
-        Serial.println("Cancelled GNSS fix.");
+        ESP_LOGD("Waltrac", "Cancelled GNSS fix.");
     } else {
-        /*Serial.println("Error: Could not cancel GNSS fix. Restarting ESP ...");
+        ESP_LOGE("Waltrac", "Could not cancel GNSS fix. Restarting ESP ...");
 
         delay(500);
-        ESP.restart();*/
+        ESP.restart();
     }
 
     return true;
@@ -391,10 +397,10 @@ bool coapConnect()
 
     /* Configure CoAP context */
     if (modem.coapCreateContext(COAP_PROFILE, WT_SERVER_HOST, WT_SERVER_PORT)) {
-        Serial.println("CoAP server context created successfully.");
+        ESP_LOGD("Waltrac", "CoAP server context created successfully.");
         return true;
     } else {
-        Serial.println("Error: CoAP server context could not be created.");
+        ESP_LOGE("Waltrac", "CoAP server context could not be created.");
         return false;
     }
 }

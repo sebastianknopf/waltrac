@@ -1,6 +1,7 @@
 #include <HardwareSerial.h>
 #include <WalterModem.h>
 #include <esp_mac.h>
+#include <esp_log.h>
 
 #include "Messages.h"
 #include "WaltracConfig.h"
@@ -12,25 +13,25 @@ void setup()
     Serial.begin(115200);
     delay(5000);
 
-    Serial.println("Waltrac Realtime GNSS Tracker");
+    ESP_LOGI("WaltracSetup", "Waltrac Realtime GNSS Tracker");
 
     /* Get the MAC address for board validation */
     esp_read_mac(macBuf, ESP_MAC_WIFI_STA);
-    Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\r\n", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
+    ESP_LOGI("WaltracSetup", "%02X:%02X:%02X:%02X:%02X:%02X\r\n", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
 
     /* Open serial connection to modem */
     if (WalterModem::begin(&Serial2)) {
-        Serial.println("Modem initialization successful.");
+        ESP_LOGD("WaltracSetup", "Modem initialization successful.");
     } else {
-        Serial.println("Error: Modem initialization failed.");
+        ESP_LOGE("WaltracSetup", "Modem initialization failed.");
         return;
     }
 
     /* Configure the GNSS subsystem */
     if(modem.gnssConfig()) {
-        Serial.println("GNSS subsystem setup successful.");
+        ESP_LOGD("WaltracSetup", "GNSS subsystem setup successful.");
     } else {
-        Serial.println("Error: GNSS subsystem setup failed.");
+        ESP_LOGE("WaltracSetup", "GNSS subsystem setup failed.");
         return;
     }
 
@@ -44,19 +45,19 @@ void loop()
 
     // update Command from server once per minute
     if (cntMntCmd >= (60 / WT_CFG_INTERVAL)) {
-        Serial.println("Checking for Command Updates ...");
+        ESP_LOGI("WaltracMain", "Checking for Command Updates ...");
         
         size_t len;
         if (coapRequestGet("command", incomingBuf, len)) {
             std::vector<uint8_t> data(incomingBuf, incomingBuf + len);
             Messages::Command c = Messages::Command::init(data);
 
-            Serial.println("Got command from server. Processing ...");
+            ESP_LOGD("WaltracMain", "Got command from server. Processing ...");
 
             if (c.verify(WT_CFG_SECRET)) {
-                Serial.println("Command processed successfully.");
+                ESP_LOGI("WaltracMain", "Command processed successfully.");
             } else {
-                Serial.println("Error: Verification of the incoming command failed.");
+                ESP_LOGE("WaltracMain", "Verification of the incoming command failed.");
             }
         }
 
@@ -67,7 +68,7 @@ void loop()
 
     // send GNSS data update
     if (gnssFixNumSatellites < 1) {
-        Serial.println("Looking for GNSS satellites ...");
+        ESP_LOGI("WaltracMain", "Looking for GNSS satellites ...");
         
         do
         {
@@ -79,14 +80,14 @@ void loop()
 
             std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
             if (coapRequestPost("position", &data[0], data.size())) {
-                Serial.println("Sent position data update successfully.");
+                ESP_LOGI("WaltracMain", "Sent position data update successfully.");
             } else {
-                Serial.println("Error: Could not send position data update.");
+                ESP_LOGE("WaltracMain", "Could not send position data update.");
             }
         }
         while(!waitForInitialGnssFix());
     } else {
-        Serial.println("Sending GNSS data update ...");
+        ESP_LOGI("WaltracMain", "Sending GNSS data update ...");
 
         Messages::Position position;
         position.setHeader(true, gnssFixNumSatellites);
@@ -98,12 +99,12 @@ void loop()
 
         std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
         if (coapRequestPost("position", &data[0], data.size())) {
-            Serial.println("Sent GNSS data update successfully.");
+            ESP_LOGI("WaltracMain", "Sent GNSS data update successfully.");
         } else {
-            Serial.println("Error: Could not send GNSS data update.");
+            ESP_LOGE("WaltracMain", "Could not send GNSS data update.");
         }
 
-        Serial.println("Performing GNSS Update ...");
+        ESP_LOGI("WaltracMain", "Performing GNSS Update ...");
 
         /* Request a new GNSS fix. */
         requestGnssFix();
@@ -124,6 +125,6 @@ void loop()
         gnssFixDurationSeconds += WT_CFG_INTERVAL;
     }
 
-    Serial.printf("Waiting %dms for next interval ...\r\n", procRemainingTime);
+    ESP_LOGI("WaltracMain", "Waiting %dms for next interval ...\r\n", procRemainingTime);
     delay(procRemainingTime);
 }
