@@ -102,24 +102,12 @@ void loop()
         } else {
             Serial.println("Error: Could not send GNSS data update.");
         }
-        
-        if (gnssFixRcvd) {
-            Serial.println("Performing GNSS Update ...");
 
-            /* Request a new GNSS fix. */
-            requestGnssFix();
-            delayUntilGnssFixReceived(7500);
-        }
-    }
+        Serial.println("Performing GNSS Update ...");
 
-    // monitor last GNSS fix, cancel and restart GNSS fix if timed out
-    if (gnssFixDurationSeconds >= MAX_GNSS_FIX_DURATION_SECONDS) {
-        Serial.println("\r\nGNSS fix timeout. Restarting GNSS fix ...");
-
-        /* Cancel current fix and request a new GNSS fix. */
-        cancelGnssFix();
+        /* Request a new GNSS fix. */
         requestGnssFix();
-        delayUntilGnssFixReceived(7500);
+        waitForGnssFixOrCancel((WT_CFG_INTERVAL * 1000));
     }
 
     // monitor elapsed time and wait until next interval

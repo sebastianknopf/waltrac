@@ -307,12 +307,21 @@ bool waitForInitialGnssFix()
     return false; 
 }
 
-void delayUntilGnssFixReceived(uint32_t timeout) 
+void waitForGnssFixOrCancel(uint32_t timeout) 
 {
     uint32_t cntMntTimeout = 0;
     while (!gnssFixRcvd && cntMntTimeout < timeout) {
         delay(100);
         cntMntTimeout += 100;
+    }
+
+    if (gnssFixRcvd) {
+        Serial.printf("GNSS fix took about %dms.\r\n", cntMntTimeout);
+    } else {
+        Serial.println("Warning: GNSS fix timeout. Cancelling GNSS fix ...");
+        
+        cancelGnssFix();
+        delay(500);
     }
 }
 
@@ -333,12 +342,20 @@ bool requestGnssFix()
 
 bool cancelGnssFix()
 {
+    /* Disconnect from the network (Required for GNSS) */
+    if(isLteConnected() && !lteDisconnect()) {
+        Serial.println("Error: Could not disconnect from the LTE network.");
+        return false;
+    }
+    
     gnssFixRcvd = false;
     if (modem.gnssPerformAction(WALTER_MODEM_GNSS_ACTION_CANCEL)) {
         Serial.println("Cancelled GNSS fix.");
     } else {
-        Serial.println("Error: Could not cancel GNSS fix.");
-        return false;
+        /*Serial.println("Error: Could not cancel GNSS fix. Restarting ESP ...");
+
+        delay(500);
+        ESP.restart();*/
     }
 
     return true;

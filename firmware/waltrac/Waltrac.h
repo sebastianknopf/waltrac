@@ -185,10 +185,10 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args);
 bool waitForInitialGnssFix();
 
 /**
- * @brief This function delays until the timeout is reached OR a GNSS fix received.
+ * @brief This function waits for a GNSS fix to receive or cancels the current GNSS fix for.
  * @return None.
  */
-void delayUntilGnssFixReceived(uint32_t timeout);
+void waitForGnssFixOrCancel(uint32_t timeout);
 
 /**
  * @brief This function requests a single GNSS fix.
