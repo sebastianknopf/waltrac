@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from aiomqtt import Client
+from paho.mqtt import client
 
 
 class MqttPublisher:
@@ -15,7 +15,7 @@ class MqttPublisher:
         self._toplevel = toplevel
         self._connected = asyncio.Event()
         self._task: asyncio.Task | None = None
-        self._client: Client|None = None
+        self._mqtt: client.Client|None = None
 
     async def start(self):
         if self._task is None or self._task.done():
@@ -33,45 +33,21 @@ class MqttPublisher:
         self._task = None
 
     async def _run(self):
-        while True:
-            try:
-                if self._username is not None and self._password is not None:
-                    client = Client(
-                        hostname=self._host,
-                        port=self._port,
-                        username=self._username,
-                        password=self._password,
-                        keepalive=self._keepalive,
-                    )
-                else:
-                    client = Client(
-                        hostname=self._host,
-                        port=self._port,
-                        keepalive=self._keepalive,
-                    )
+        self._mqtt = client.Client(client.CallbackAPIVersion.VERSION2, protocol=client.MQTTv5, client_id='waltrac-gateway')
 
-                async with client:
-                    self._client = client
-                    logging.info("Connected to MQTT broker.")
+        if self._username is not None and self._password is not None:
+            self._mqtt.username_pw_set(username=self._username, password=self._password)
 
-                    self._connected.set()
-                    
-                    await asyncio.Event().wait()
+        self._mqtt.connect(self._host, self._port)
+        self._mqtt.loop_start()
 
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logging.exception("Connection to MQTT broker interrupted, re-connecting in 5s.")
-
-                self._client = None
-                self._connected.clear()
-                await asyncio.sleep(5)
+        self._connected.set()
 
     async def publish(self, topic: str, payload: bytes):
         await self._connected.wait()
         
         try:
-            await self._client.publish(f"{self._toplevel}/{topic}", payload)
+            await self._mqtt.publish(f"{self._toplevel}/{topic}", payload)
         except Exception:
             self._connected.clear()
             

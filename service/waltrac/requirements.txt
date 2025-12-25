@@ -1,4 +1,3 @@
 aiocoap
-aiomqtt
 click
-typing-extensions
+paho-mqtt
