@@ -87,27 +87,26 @@ void loop()
         }
         while(!waitForInitialGnssFix());
     } else {
-        ESP_LOGI("WaltracMain", "Sending GNSS data update ...");
-
-        Messages::Position position;
-        position.setHeader(true, gnssFixNumSatellites);
-        position.interval = WT_CFG_INTERVAL;
-        memcpy(position.device, macBuf, 6);
-        position.name = WT_CFG_NAME;
-        position.latitude = latestGnssFix.latitude;
-        position.longitude = latestGnssFix.longitude;
-
-        std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
-        if (coapRequestPost("position", &data[0], data.size())) {
-            ESP_LOGI("WaltracMain", "Sent GNSS data update successfully.");
-        } else {
-            ESP_LOGE("WaltracMain", "Could not send GNSS data update.");
-        }
-
         ESP_LOGI("WaltracMain", "Performing GNSS Update ...");
 
-        /* Request a new GNSS fix. */
-        attemptGnssFix();
+        if (attemptGnssFix()) {
+            ESP_LOGI("WaltracMain", "Sending GNSS data update ...");
+
+            Messages::Position position;
+            position.setHeader(true, gnssFixNumSatellites);
+            position.interval = WT_CFG_INTERVAL;
+            memcpy(position.device, macBuf, 6);
+            position.name = WT_CFG_NAME;
+            position.latitude = latestGnssFix.latitude;
+            position.longitude = latestGnssFix.longitude;
+
+            std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
+            if (coapRequestPost("position", &data[0], data.size())) {
+                ESP_LOGI("WaltracMain", "Sent GNSS data update successfully.");
+            } else {
+                ESP_LOGE("WaltracMain", "Could not send GNSS data update.");
+            }
+        }   
     }
 
     // monitor elapsed time and wait until next interval
