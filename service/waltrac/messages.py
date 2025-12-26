@@ -81,6 +81,8 @@ class Position(Payload):
 	# typed attributes
 	header: bytes
 	interval: int
+	confidence: int
+	satellites: int
 	device: bytes
 	latitude: float
 	longitude: float
@@ -92,23 +94,24 @@ class Position(Payload):
 		self.device = b"\x00" * 6
 		self.header = b"\x00"
 		self.interval = 0
+		self.confidence = 0
+		self.satellites = 0
 		self.latitude = 0.0
 		self.longitude = 0.0
 		self.namelen = 0
 		self.name = ""
 		self.hmac = b"\x00" * 16
 
-	def set_header(self, valid: bool, num_satellites: int) -> None:
+	def set_header(self, valid: bool) -> None:
 		"""Set the single-byte header from components.
 
-		MSB is always 1, bit 6 is the `valid` flag, bits 5-0 contain
-		the satellite count (masked to 6 bits).
+		MSB is always 1, bit 0 is the `valid` flag.
 		"""
-		header_val = 0x80 | ((1 if valid else 0) << 6) | (num_satellites & 0x3F)
+		header_val = 0x80 | ((1 if valid else 0) << 1)
 		self.header = bytes([header_val])
 
-	def get_header(self) -> Tuple[bool, int]:
-		"""Return (valid, num_satellites) decoded from the header byte."""
+	def get_header(self) -> Tuple[bool]:
+		"""Return (valid) decoded from the header byte."""
 		if isinstance(self.header, (bytes, bytearray)):
 			if len(self.header) != 1:
 				raise ValueError('header must be a single byte')
@@ -116,10 +119,9 @@ class Position(Payload):
 		else:
 			b = int(self.header)
 
-		valid = bool((b >> 6) & 0x01)
-		num_satellites = b & 0x3F
+		valid = bool((b >> 1) & 0x01)
 
-		return (valid, num_satellites)
+		return (valid,)
 
 	@staticmethod
 	def init(data: bytes) -> "Position":
@@ -140,6 +142,14 @@ class Position(Payload):
 
 		# 1 byte interval (unsigned)
 		p.interval = struct.unpack_from('>B', data, offset)[0]
+		offset += 1
+
+		# 1 byte confidence (unsigned)
+		p.confidence = struct.unpack_from('>B', data, offset)[0]
+		offset += 1
+
+		# 1 byte satellites (unsigned)
+		p.satellites = struct.unpack_from('>B', data, offset)[0]
 		offset += 1
 
 		# 6 byte device
@@ -186,9 +196,11 @@ class Position(Payload):
 		"""Serialize all fields except the trailing HMAC (for signing/verifying)."""
 		parts = bytearray()
 
-		# order: header, interval, device, latitude, longitude, namelen, name
+		# order: header, interval, confidence, satellites, device, latitude, longitude, namelen, name
 		parts += self.header
 		parts += struct.pack('>B', int(self.interval))
+		parts += struct.pack('>B', int(self.confidence))
+		parts += struct.pack('>B', int(self.satellites))
 		parts += self.device
 
 		lat_int = int(round(self.latitude * self.SCALE))
@@ -210,6 +222,7 @@ class Position(Payload):
 	def __repr__(self) -> str:  # pragma: no cover - convenience
 		return (
 			f"Position(header={self.header!r}, interval={self.interval}, "
+			f"confidence={self.confidence}, satellites={self.satellites}, "
 			f"device={self.device!r}, latitude={self.latitude}, "
 			f"longitude={self.longitude}, name={self.name!r}, hmac={self.hmac!r})"
 		)

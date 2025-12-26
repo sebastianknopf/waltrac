@@ -29,12 +29,13 @@ class PositionResource(resource.Resource):
             
             logging.info(f"Processing: {pos}")
 
-            (valid, num_satellites) = pos.get_header()
+            (valid,) = pos.get_header()
             data: dict = {
+                'vl': valid,
+                'cn': pos.confidence,
+                'st': pos.satellites,
                 'dv': pos.device.hex(),
                 'ts': int(time()),
-                'vl': valid,
-                'st': num_satellites,
                 'lt': pos.latitude,
                 'lg': pos.longitude,
                 'nm': pos.name

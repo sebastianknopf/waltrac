@@ -107,9 +107,8 @@ bool Payload::verify(const char* key) const {
 // --- Position --------------------------------------------------------------
 
 Position Position::init(const std::vector<uint8_t>& data) {
-    // min_fixed = 1(header) +1(interval)+6(device)+4(lat)+4(lon)+4(ts)+1(namelen)+16(hmac)
-        // min_fixed = 1(header) +1(interval)+6(device)+4(lat)+4(lon)+1(namelen)+16(hmac)
-        const size_t min_fixed = 1 + 1 + 6 + 4 + 4 + 1 + 16;
+    // min_fixed = 1(header)+1(interval)+1(confidence)+1(satellites)+6(device)+4(lat)+4(lon)+1(namelen)+16(hmac)
+    const size_t min_fixed = 1 + 1 + 1 + 1 + 6 + 4 + 4 + 1 + 16;
     if (data.size() < min_fixed) {
         throw std::runtime_error("data too short for Position");
     }
@@ -119,6 +118,9 @@ Position Position::init(const std::vector<uint8_t>& data) {
 
     p.header = data[offset++];
     p.interval = data[offset++];
+    p.confidence = data[offset++];
+    p.satellites = data[offset++];
+
     for (size_t i = 0; i < 6; ++i) {
         p.device[i] = data[offset++];
     }
@@ -162,6 +164,12 @@ std::vector<uint8_t> Position::_serialize_fields() const {
     // interval
     push_u8(parts, interval);
 
+    // confidence
+    push_u8(parts, confidence);
+
+    // satellites
+    push_u8(parts, satellites);
+
     // device (6 bytes)
     parts.insert(parts.end(), device, device + 6);
 
@@ -190,21 +198,19 @@ std::vector<uint8_t> Position::serialize(const char* key) {
     return Payload::serialize(key);
 }
 
-void Position::setHeader(bool valid, uint8_t numSatellites) {
-    header = 0x80;                     // MSB immer 1
-    header |= (valid ? 1 : 0) << 6;    // Bit 6 = Flag
-    header |= (numSatellites & 0x3F);  // Bits 5-0 = Satelliten
+void Position::setHeader(bool isValid) {
+    header = 0x80;                      // MSB immer 1
+    header |= (isValid ? 1 : 0) << 1;   // Bit 0 = Flag
 }
 
-void Position::getHeader(bool &valid, uint8_t &numSatellites) {
-    valid = (header >> 6) & 0x01;      // Bit 6 = Flag
-    numSatellites = header & 0x3F;     // Bits 5-0 = Satelliten
+void Position::getHeader(bool &isValid) {
+    isValid = (header >> 1) & 0x01;     // Bit 6 = Flag
 }
 
 std::string Position::toString() const {
     char buf[200];
-    snprintf(buf, sizeof(buf), "Position(header=%u, interval=%u, device=[%02x%02x%02x%02x%02x%02x], lat=%.7f, lon=%.7f, name=%s)",
-             header, interval,
+    snprintf(buf, sizeof(buf), "Position(header=%u, interval=%u, confidence=%u, satellites=%u, device=[%02x%02x%02x%02x%02x%02x], lat=%.7f, lon=%.7f, name=%s)",
+             header, interval, confidence, satellites,
              device[0], device[1], device[2], device[3], device[4], device[5],
              latitude, longitude, name.c_str());
     

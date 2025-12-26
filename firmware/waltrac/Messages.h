@@ -37,9 +37,11 @@ class Position : public Payload {
 public:
     static constexpr double SCALE = 1e7;
 
-    // fields in order: header, interval, device(6), latitude, longitude, namelen, name, hmac
+    // fields in order: header, interval, confidence, satellites, device(6), latitude, longitude, namelen, name, hmac
     uint8_t header = 0;
     uint8_t interval = 0;
+    uint8_t confidence = 0;
+    uint8_t satellites = 0;
     uint8_t device[6] = {0};
     double latitude = 0.0;
     double longitude = 0.0;
@@ -56,10 +58,10 @@ public:
     std::vector<uint8_t> serialize(const char* key = nullptr);
 
     // Set the header byte by its parameters
-    void setHeader(bool valid, uint8_t numSatellites);
+    void setHeader(bool isValid);
 
     // Get the header params
-    void getHeader(bool &valid, uint8_t &numSatellites);
+    void getHeader(bool &isValid);
 
 protected:
     std::vector<uint8_t> _serialize_fields() const override;

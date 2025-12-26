@@ -73,8 +73,10 @@ void loop()
         do
         {
             Messages::Position position;
-            position.setHeader(false, gnssFixNumSatellites);
+            position.setHeader(false);
             position.interval = WT_CFG_INTERVAL;
+            position.confidence = 0;
+            position.satellites = gnssFixNumSatellites;
             memcpy(position.device, macBuf, 6);
             position.name = WT_CFG_NAME;
 
@@ -93,8 +95,10 @@ void loop()
             ESP_LOGI("WaltracMain", "Sending GNSS data update ...");
 
             Messages::Position position;
-            position.setHeader(true, gnssFixNumSatellites);
+            position.setHeader(true);
             position.interval = WT_CFG_INTERVAL;
+            position.confidence = (int)latestGnssFix.estimatedConfidence;
+            position.satellites = gnssFixNumSatellites;
             memcpy(position.device, macBuf, 6);
             position.name = WT_CFG_NAME;
             position.latitude = latestGnssFix.latitude;
