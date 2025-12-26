@@ -223,9 +223,7 @@ bool validateGNSSClock(WalterModemRsp* rsp)
 void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
 {
     latestGnssFix = *fix;
-    
     gnssFixRcvd = true;
-    gnssFixDurationSeconds = 0;
     
     /* Count satellites with good signal strength */
     gnssFixNumSatellites = 0;
@@ -236,6 +234,8 @@ void gnssEventHandler(const WalterModemGNSSFix* fix, void* args)
     }
 
     ESP_LOGI("Waltrac", "Received GNSS fix to %.06f, %.06f with %d satellites after %ds.", latestGnssFix.latitude, latestGnssFix.longitude, gnssFixNumSatellites, gnssFixDurationSeconds);
+
+    gnssFixDurationSeconds = 0;
 }
 
 bool waitForInitialGnssFix() 
