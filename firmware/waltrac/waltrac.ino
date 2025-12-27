@@ -16,7 +16,7 @@ void setup()
     ESP_LOGI("WaltracSetup", "Waltrac Realtime GNSS Tracker");
 
     /* Get the MAC address for board validation */
-    esp_read_mac(macBuf, ESP_MAC_WIFI_STA);
+    esp_read_mac(macBuf, ESP_MAC_WIFI_STA);    
     ESP_LOGI("WaltracSetup", "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
 
     /* Open serial connection to modem */
@@ -45,7 +45,7 @@ void loop()
 
     // update Command from server once per minute
     if (cntMntCmd >= (60 / WT_CFG_INTERVAL)) {
-        ESP_LOGI("WaltracMain", "Checking for Command Updates ...");
+        /*ESP_LOGI("WaltracMain", "Checking for Command Updates ...");
         
         size_t len;
         if (coapRequestGet("command", incomingBuf, len)) {
@@ -59,7 +59,7 @@ void loop()
             } else {
                 ESP_LOGE("WaltracMain", "Verification of the incoming command failed.");
             }
-        }
+        }*/
 
         cntMntCmd = 0;
     } else {
@@ -81,7 +81,7 @@ void loop()
             position.name = WT_CFG_NAME;
 
             std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
-            if (coapRequestPost("position", &data[0], data.size())) {
+            if (coapSendPositionUpdate(&data[0], data.size())) {
                 ESP_LOGI("WaltracMain", "Sent position data update successfully.");
             } else {
                 ESP_LOGE("WaltracMain", "Could not send position data update.");
@@ -105,7 +105,7 @@ void loop()
             position.longitude = latestGnssFix.longitude;
 
             std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
-            if (coapRequestPost("position", &data[0], data.size())) {
+            if (coapSendPositionUpdate(&data[0], data.size())) {
                 ESP_LOGI("WaltracMain", "Sent GNSS data update successfully.");
             } else {
                 ESP_LOGE("WaltracMain", "Could not send GNSS data update.");

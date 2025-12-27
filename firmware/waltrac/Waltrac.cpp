@@ -25,6 +25,8 @@ bool waitForNetwork()
 
         if (timeout++ >= MAX_NETWORK_TIMEOUT_SECONDS) {
             ESP_LOGE("Waltrac", "Network connection timeout reached.");
+            
+            lteDisconnect(); 
             return false;
         }
     }
@@ -252,8 +254,8 @@ bool waitForInitialGnssFix()
         ESP_LOGW("Waltrac", "Could not update GNSS assistance data. Continuing without assistance.");
     }
 
-    /* Disconnect from the network (Required for GNSS) */
-    if(isLteConnected() && !lteDisconnect()) {
+    /* Disconnect from the network if network is connected or in lookup (Required for GNSS) */
+    if(!lteDisconnect()) {
         ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
@@ -311,8 +313,8 @@ bool attemptGnssFix(uint32_t numAttempts)
         ESP_LOGW("Waltrac", "Could not update GNSS assistance data. Continuing without assistance.");
     }
 
-    /* Disconnect from the network (Required for GNSS) */
-    if(isLteConnected() && !lteDisconnect()) {
+    /* Disconnect from the network if network is connected or in lookup (Required for GNSS) */
+    if(!lteDisconnect()) {
         ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
@@ -376,51 +378,51 @@ bool attemptGnssFix(uint32_t numAttempts)
     return false;
 }
 
-bool waitForResponse(uint8_t* output, size_t& outputLen) 
-{
-    WalterModemRsp rsp = {};
-    uint8_t buffer[274] = {0};
-    
-    int i = COAP_TIMEOUT_SECONDS;
-    while(i && !modem.coapDidRing(COAP_PROFILE, buffer, sizeof(buffer), &rsp)) {
-        delay(1000);
-        i--;
-    }
-
-    outputLen = rsp.data.coapResponse.length;
-    memcpy(output, buffer, outputLen);
-
-    if (i > 0) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
 bool coapConnect() 
-{
+{    
     /* Enable LTE network and create CoAP context. */
     if (!isLteConnected() && !lteConnect()) {
         return false;
     }
 
     /* Configure CoAP context */
-    if (modem.coapCreateContext(COAP_PROFILE, WT_SERVER_HOST, WT_SERVER_PORT)) {
-        ESP_LOGD("Waltrac", "CoAP server context created successfully.");
-        return true;
-    } else {
-        ESP_LOGE("Waltrac", "CoAP server context could not be created.");
-        return false;
+    if (!modem.coapGetContextStatus(COAP_PROFILE)) {
+        if (modem.coapCreateContext(COAP_PROFILE, WT_SERVER_HOST, WT_SERVER_PORT)) {
+            ESP_LOGD("Waltrac", "CoAP server context created successfully.");
+            return true;
+        } else {
+            ESP_LOGE("Waltrac", "CoAP server context could not be created.");
+            return false;
+        }
     }
+
+    ESP_LOGD("Waltrac", "CoAP server context still active, no need for new initialisation.");
+    return true;
 }
 
-bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen) 
+bool coapSendPositionUpdate(uint8_t* data, size_t dataLen) 
 {    
+    char deviceId[13];
+    char *deviceIdPtr = deviceId;
+    sprintf(deviceIdPtr, "%02x%02x%02x%02x%02x%02x", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
+    
     if (!coapConnect()) {
         return false;
     }
+
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "ps")) {
+        return false;
+    }
+
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "waltrac")) {
+        return false;
+    }
     
-    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, resource)) {
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "pos")) {
+        return false;
+    }
+
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, deviceIdPtr)) {
         return false;
     }
 
@@ -431,13 +433,33 @@ bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen)
     return true;
 }
 
-bool coapRequestGet(const char* resource, uint8_t* output, size_t& outputLen) 
+bool coapRequestGet(uint8_t* output, size_t& outputLen) 
 {
+    char deviceId[13];
+    char *deviceIdPtr = deviceId;
+    sprintf(deviceIdPtr, "%02x%02x%02x%02x%02x%02x", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
+    
     if (!coapConnect()) {
         return false;
     }
     
-    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, resource)) {
+    // /ps
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "ps")) {
+        return false;
+    }
+
+    // /waltrac
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "waltrac")) {
+        return false;
+    }
+    
+    // /command
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "cmd")) {
+        return false;
+    }
+
+    // /{deviceId}
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, deviceIdPtr)) {
         return false;
     }
 
@@ -445,5 +467,5 @@ bool coapRequestGet(const char* resource, uint8_t* output, size_t& outputLen)
         return false;
     }
 
-    return waitForResponse(output, outputLen);
+    return true;
 }

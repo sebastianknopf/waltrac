@@ -17,7 +17,7 @@
 /**
  * @brief Network timeout for connecting.
  */
-#define MAX_NETWORK_TIMEOUT_SECONDS 60
+#define MAX_NETWORK_TIMEOUT_SECONDS 30
 
 /**
  * @brief All fixes with a confidence below this number are considered ok.
@@ -188,31 +188,20 @@ bool waitForInitialGnssFix();
 bool attemptGnssFix(uint32_t numAttempts = MAX_GNSS_FIX_ATTEMPTS);
 
 /**
- * @brief This function waits for a CoAP response and writes the data to the supplied buffer.
- *
- * @param output Pointer to the output buffer the data are written to.
- * @param outputLen Size of the output data.
- *
- * @return true if the response was received, else false.
- */
-bool waitForResponse(uint8_t* output, size_t& outputLen);
-
-/**
  * @brief This functions connects to the LTE network and creates / refreshes the CoAP context.
  * @return true if the CoAP context could be created, false if not.
  */
 bool coapConnect();
 
 /**
- * @brief This function performas a CoAP POST request on the given resource. Response is not awaited, the function does simple fire & forget.
+ * @brief This function sends a position update to the CoAP gateway server. Response is not awaited, the function does simple fire & forget.
  *
- * @param resource Name of the resource to be connected to.
  * @param data Pointer to the data sent in this request.
  * @param dataLen Size of the dataset sent in this request.
  *
  * @return true if the request was successful, else false.
  */
-bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen);
+bool coapSendPositionUpdate(uint8_t* data, size_t dataLen);
 
 /**
  * @brief This function performas a CoAP GET request on the given resource.
@@ -222,4 +211,4 @@ bool coapRequestPost(const char* resource, uint8_t* data, size_t dataLen);
  *
  * @return true if the request was successful, else false.
  */
-bool coapRequestGet(const char* resource, uint8_t* output, size_t& outputLen);
+bool coapRequestGet(uint8_t* output, size_t& outputLen);
