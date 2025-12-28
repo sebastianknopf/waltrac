@@ -4,6 +4,8 @@
 #include <WalterModem.h>
 #include <esp_mac.h>
 
+#include "Messages.h"
+
 /**
  * @brief COAP profile used for connection.
  */
@@ -18,6 +20,11 @@
  * @brief Network timeout for connecting.
  */
 #define MAX_NETWORK_TIMEOUT_SECONDS 30
+
+/**
+ * @brief Time frame for the command mode to be active at startup.
+ */
+#define CMD_TIMEOUT_SECONDS 60
 
 /**
  * @brief All fixes with a confidence below this number are considered ok.
@@ -58,6 +65,11 @@ extern volatile uint8_t gnssFixNumSatellites;
  * @brief The duration counter for maintaining GNSS timeouts.
  */
 extern volatile uint32_t gnssFixDurationSeconds;
+
+/**
+ * @brief Flag used to signal when the command mode was left.
+ */
+extern volatile bool cmdModeActive;
 
 /**
  * @brief The buffer for the MAC adress to be stored.
@@ -188,6 +200,15 @@ bool waitForInitialGnssFix();
 bool attemptGnssFix(uint32_t numAttempts = MAX_GNSS_FIX_ATTEMPTS);
 
 /**
+ * @brief CoAP event handler. Handles CoAP events.
+ *
+ * @param event The CoAP event occured.
+ * @param profileId The profile ID on which the CoAP event occured.
+ * @param args User argument pointer passed to coapSetEventHandler.
+ */
+void coapEventHandler(WalterModemCoapEvent event, int profileId, void *args);
+
+/**
  * @brief This functions connects to the LTE network and creates / refreshes the CoAP context.
  * @return true if the CoAP context could be created, false if not.
  */
@@ -204,11 +225,17 @@ bool coapConnect();
 bool coapSendPositionUpdate(uint8_t* data, size_t dataLen);
 
 /**
- * @brief This function performas a CoAP GET request on the given resource.
+ * @brief This function subscribes the commands ressource from CoAP server.
  *
- * @param output Pointer to the output buffer the data are written to.
- * @param outputLen Size of the output data.
- *
- * @return true if the request was successful, else false.
+ * @return true if the subscription was successful, else false.
  */
-bool coapRequestGet(uint8_t* output, size_t& outputLen);
+bool coapSubscribeCommands();
+
+/**
+ * @brief This functions checks the CoAP input buffer and tries to fill a command object.
+ *
+ * @param command Reference to the command object to be filled.
+ *
+ * @return true if a valid command could be obtained, else false.
+ */
+bool getCommand(Messages::Command &command);

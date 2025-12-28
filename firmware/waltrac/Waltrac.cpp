@@ -10,6 +10,8 @@ volatile bool gnssFixRcvd = false;
 volatile uint8_t gnssFixNumSatellites = 0;
 volatile uint32_t gnssFixDurationSeconds = 0;
 
+volatile bool cmdModeActive = true;
+
 uint8_t macBuf[6] = {0};
 uint8_t incomingBuf[274] = {0};
 
@@ -378,6 +380,13 @@ bool attemptGnssFix(uint32_t numAttempts)
     return false;
 }
 
+void coapEventHandler(WalterModemCoapEvent event, int profileId, void *args) 
+{
+    if (event == WALTER_MODEM_COAP_EVENT_DISCONNECTED && profileId == COAP_PROFILE) {
+        cmdModeActive = false;
+    }
+}
+
 bool coapConnect() 
 {    
     /* Enable LTE network and create CoAP context. */
@@ -433,7 +442,7 @@ bool coapSendPositionUpdate(uint8_t* data, size_t dataLen)
     return true;
 }
 
-bool coapRequestGet(uint8_t* output, size_t& outputLen) 
+bool coapSubscribeCommands() 
 {
     char deviceId[13];
     char *deviceIdPtr = deviceId;
@@ -463,9 +472,51 @@ bool coapRequestGet(uint8_t* output, size_t& outputLen)
         return false;
     }
 
+    // set Observe = 0
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_OBSERVE, "0")) {
+        return false;
+    }
+
+    // set Token
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_TOKEN, deviceIdPtr)) {
+        return false;
+    }
+
     if (!modem.coapSendData(COAP_PROFILE, WALTER_MODEM_COAP_SEND_TYPE_CON, WALTER_MODEM_COAP_SEND_METHOD_GET, 0, nullptr)) {
         return false;
     }
 
     return true;
+}
+
+bool getCommand(Messages::Command &command)
+{    
+    WalterModemRsp rsp = {};
+    uint8_t buffer[274] = {0};
+
+    if (modem.coapDidRing(COAP_PROFILE, buffer, sizeof(buffer), &rsp)) {
+        if (rsp.data.coapResponse.length > 0) {
+            try {
+                std::vector<uint8_t> data(buffer, buffer + rsp.data.coapResponse.length);
+
+                command = Messages::Command::init(data);
+                ESP_LOGD("Waltrac", "Got command from server.");
+
+                if (command.verify(WT_CFG_SECRET)) {
+                    ESP_LOGI("Waltrac", "Command processed successfully.");
+                } else {
+                    ESP_LOGE("Waltrac", "Verification of the incoming command failed.");
+                }
+
+                return true;
+            } catch(const std::runtime_error &e) {
+                ESP_LOGE("Waltrac", "Failed to parse incoming data as command.");
+                return false;
+            }
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
 }

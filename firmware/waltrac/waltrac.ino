@@ -37,34 +37,34 @@ void setup()
 
     /* Set the GNSS fix event handler */
     modem.gnssSetEventHandler(gnssEventHandler, NULL);
+
+    /* Set CoAP event handler */
+    modem.coapSetEventHandler(coapEventHandler, NULL);
+
+    // update Command from server once per minute
+    if (coapSubscribeCommands()) {
+        uint8_t cntMntCmdTimeout = 0;
+        while(cmdModeActive && cntMntCmdTimeout++ < CMD_TIMEOUT_SECONDS) {
+            Messages::Command command;
+            if (getCommand(command)) {
+                ESP_LOGI("WaltracMain", "Received Command!");
+                ESP_LOGI("WaltracMain", "%s", command.arg.c_str());
+
+                cntMntCmdTimeout = 0;
+            }
+
+            delay(1000);
+        }
+
+        ESP_LOGI("WaltracMain", "Command mode time frame ended after %ds. Entering main loop ...", cntMntCmdTimeout);
+    } else {
+        ESP_LOGW("WaltracMain", "Cannot subscribe command topic for entering command mode.");
+    }
 }
 
 void loop() 
 {
     uint64_t procDurationStart = millis();
-
-    // update Command from server once per minute
-    if (cntMntCmd >= (60 / WT_CFG_INTERVAL)) {
-        /*ESP_LOGI("WaltracMain", "Checking for Command Updates ...");
-        
-        size_t len;
-        if (coapRequestGet("command", incomingBuf, len)) {
-            std::vector<uint8_t> data(incomingBuf, incomingBuf + len);
-            Messages::Command c = Messages::Command::init(data);
-
-            ESP_LOGD("WaltracMain", "Got command from server. Processing ...");
-
-            if (c.verify(WT_CFG_SECRET)) {
-                ESP_LOGI("WaltracMain", "Command processed successfully.");
-            } else {
-                ESP_LOGE("WaltracMain", "Verification of the incoming command failed.");
-            }
-        }*/
-
-        cntMntCmd = 0;
-    } else {
-        cntMntCmd++;
-    }
 
     // send GNSS data update
     if (gnssFixNumSatellites < 1) {
