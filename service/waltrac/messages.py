@@ -8,6 +8,12 @@ from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 
 
+WT_CMD_TYPE_DISCOVER = 0
+WT_CMD_TYPE_SETINTERVAL = 1
+WT_CMD_TYPE_SETNAME = 2
+WT_CMD_TYPE_EXIT = 3
+
+
 class Payload(ABC):
 	"""Abstract base class for payload types that support signing/verification.
 
@@ -65,6 +71,8 @@ class Position(Payload):
 
 	- 1 byte header (bytes)
 	- 1 byte interval (unsigned int)
+	- 1 byte confidence (unsigned int)
+	- 1 byte satellites (unsigned int)
 	- 6 bytes device (bytes)
 	- 4 bytes latitude (signed int, stored as int = float * 1e7)
 	- 4 bytes longitude (signed int, stored as int = float * 1e7)
@@ -248,16 +256,24 @@ class Command(Payload):
 		self.arg = ""
 		self.hmac = b"\x00" * 16
 
-	def set_header() -> None:
-		"""Set the single-byte header from components."""
+	def set_header(self, action: int) -> None:
+		"""Set the single-byte header from components.
+		
+		MSB is always 1, bit 0-4 is the action ID.
+		"""
+		header_val = 0x80 | (action & 0x0F)
+		self.header = bytes([header_val])
 
-		pass
+	def get_header(self) -> Tuple[int]:
+		"""Return (valid) decoded from the header byte."""
+		if isinstance(self.header, (bytes, bytearray)):
+			if len(self.header) != 1:
+				raise ValueError('header must be a single byte')
 
-	def get_header(self) -> Tuple:
-		"""Return empty tuple() decoded from the header byte."""
+		action = int(self.header[0] & 0x0F)
 
-		return tuple()
-	
+		return (action,)
+
 	@staticmethod
 	def init(data: bytes) -> "Command":
 		if not isinstance(data, (bytes, bytearray)):

@@ -1,3 +1,2 @@
-aiocoap
 click
 paho-mqtt
