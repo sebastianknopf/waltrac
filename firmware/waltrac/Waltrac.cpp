@@ -13,6 +13,7 @@ volatile uint32_t gnssFixDurationSeconds = 0;
 volatile bool cmdModeActive = true;
 
 uint8_t macBuf[6] = {0};
+char macHex[13] = {0};
 uint8_t incomingBuf[274] = {0};
 
 uint8_t cntMntInv = 0;
@@ -411,10 +412,6 @@ bool coapConnect()
 
 bool coapSendPositionUpdate(uint8_t* data, size_t dataLen) 
 {    
-    char deviceId[13];
-    char *deviceIdPtr = deviceId;
-    sprintf(deviceIdPtr, "%02x%02x%02x%02x%02x%02x", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
-    
     if (!coapConnect()) {
         return false;
     }
@@ -431,7 +428,36 @@ bool coapSendPositionUpdate(uint8_t* data, size_t dataLen)
         return false;
     }
 
-    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, deviceIdPtr)) {
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, macHex)) {
+        return false;
+    }
+
+    if (!modem.coapSendData(COAP_PROFILE, WALTER_MODEM_COAP_SEND_TYPE_CON, WALTER_MODEM_COAP_SEND_METHOD_POST, dataLen, data)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool coapSendCommand(uint8_t* data, size_t dataLen) 
+{    
+    if (!coapConnect()) {
+        return false;
+    }
+
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "ps")) {
+        return false;
+    }
+
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "waltrac")) {
+        return false;
+    }
+    
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "cmd")) {
+        return false;
+    }
+
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, "control")) {
         return false;
     }
 
@@ -444,10 +470,6 @@ bool coapSendPositionUpdate(uint8_t* data, size_t dataLen)
 
 bool coapSubscribeCommands() 
 {
-    char deviceId[13];
-    char *deviceIdPtr = deviceId;
-    sprintf(deviceIdPtr, "%02x%02x%02x%02x%02x%02x", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
-    
     if (!coapConnect()) {
         return false;
     }
@@ -468,7 +490,7 @@ bool coapSubscribeCommands()
     }
 
     // /{deviceId}
-    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, deviceIdPtr)) {
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_EXTEND, WALTER_MODEM_COAP_OPT_CODE_URI_PATH, macHex)) {
         return false;
     }
 
@@ -478,7 +500,7 @@ bool coapSubscribeCommands()
     }
 
     // set Token
-    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_TOKEN, deviceIdPtr)) {
+    if(!modem.coapSetOptions(COAP_PROFILE, WALTER_MODEM_COAP_OPT_SET, WALTER_MODEM_COAP_OPT_CODE_TOKEN, macHex)) {
         return false;
     }
 
@@ -503,7 +525,7 @@ bool getCommand(Messages::Command &command)
                 ESP_LOGD("Waltrac", "Got command from server.");
 
                 if (command.verify(WT_CFG_SECRET)) {
-                    ESP_LOGI("Waltrac", "Command processed successfully.");
+                    ESP_LOGI("Waltrac", "Command verified successfully.");
                 } else {
                     ESP_LOGE("Waltrac", "Verification of the incoming command failed.");
                 }

@@ -77,6 +77,11 @@ extern volatile bool cmdModeActive;
 extern uint8_t macBuf[6];
 
 /**
+ * @brief The buffer for the MAC address as HEX string to be stored.
+ */
+extern char macHex[13];
+
+/**
  * @brief Buffer for incoming COAP response
  */
 extern uint8_t incomingBuf[274];
@@ -223,6 +228,16 @@ bool coapConnect();
  * @return true if the request was successful, else false.
  */
 bool coapSendPositionUpdate(uint8_t* data, size_t dataLen);
+
+/**
+ * @brief This function sends a command to the control backend. Response is not awaited, the function does simple fire & forget.
+ *
+ * @param data Pointer to the data sent in this request.
+ * @param dataLen Size of the dataset sent in this request.
+ *
+ * @return true if the request was successful, else false.
+ */
+bool coapSendCommand(uint8_t *data, size_t dataLen);
 
 /**
  * @brief This function subscribes the commands ressource from CoAP server.

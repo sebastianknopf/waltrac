@@ -12,6 +12,14 @@
 
 namespace Messages {
 
+typedef enum
+{
+    COMMAND_ACTION_DISCOVER,
+    COMMAND_ACTION_SETINTERVAL,
+    COMMAND_ACTION_SETNAME,
+    COMMAND_ACTION_EXIT
+} CommandAction;
+
 class Payload {
 public:
     virtual ~Payload() = default;
@@ -85,10 +93,10 @@ public:
     std::vector<uint8_t> serialize(const char* key = nullptr);
 
     // Set the header byte by its parameters
-    void setHeader();
+    void setHeader(CommandAction action);
 
     // Get the header params
-    void getHeader();
+    void getHeader(CommandAction &action);
 
 protected:
     std::vector<uint8_t> _serialize_fields() const override;

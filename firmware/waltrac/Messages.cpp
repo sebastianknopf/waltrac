@@ -4,6 +4,8 @@
 #include <cmath>
 #include <mbedtls/md.h>
 
+#include <esp.h>
+
 namespace Messages {
 
 // --- helpers -----------------------------------------------------------------
@@ -271,12 +273,13 @@ std::vector<uint8_t> Command::serialize(const char* key) {
     return Payload::serialize(key);
 }
 
-void Command::setHeader() {
-    header = 0x80;                     // MSB immer 1
+void Command::setHeader(CommandAction action) {
+    header = 0x80;                     // MSB always 1
+    header |= (action & 0x0F);         // Bit 0-4 = Action
 }
 
-void Command::getHeader() {
-    // currently empty
+void Command::getHeader(CommandAction &action) {
+    action = (CommandAction)(header & 0x0F);
 }
 
 std::string Command::toString() const {

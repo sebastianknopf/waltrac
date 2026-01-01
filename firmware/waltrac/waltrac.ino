@@ -18,6 +18,7 @@ void setup()
     /* Get the MAC address for board validation */
     esp_read_mac(macBuf, ESP_MAC_WIFI_STA);    
     ESP_LOGI("WaltracSetup", "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
+    sprintf(macHex, "%02x%02x%02x%02x%02x%02x", macBuf[0], macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
 
     /* Open serial connection to modem */
     if (WalterModem::begin(&Serial2)) {
@@ -41,14 +42,32 @@ void setup()
     /* Set CoAP event handler */
     modem.coapSetEventHandler(coapEventHandler, NULL);
 
+    /* send a discover command at the first connection attempt */
+    Messages::Command command = {};
+    command.setHeader(Messages::COMMAND_ACTION_DISCOVER);
+    command.arg = macHex;
+
+    std::vector<uint8_t> data = command.serialize(WT_CFG_SECRET);
+    if (!coapSendCommand(&data[0], data.size())) {
+        ESP_LOGE("WaltracSetup", "Could not send discover command.");
+    }
+
+    delay(2500);
+
     // update Command from server once per minute
     if (coapSubscribeCommands()) {
         uint8_t cntMntCmdTimeout = 0;
         while(cmdModeActive && cntMntCmdTimeout++ < CMD_TIMEOUT_SECONDS) {
-            Messages::Command command;
             if (getCommand(command)) {
-                ESP_LOGI("WaltracMain", "Received Command!");
-                ESP_LOGI("WaltracMain", "%s", command.arg.c_str());
+                Messages::CommandAction commandAction;
+                command.getHeader(commandAction);
+
+                if (commandAction == Messages::COMMAND_ACTION_EXIT) {
+                    ESP_LOGD("WaltracSetup", "Recevied Command EXIT.");
+                    break;
+                } else {
+                    ESP_LOGD("WaltracSetup", "Unknown Command.");
+                }
 
                 cntMntCmdTimeout = 0;
             }
@@ -56,9 +75,9 @@ void setup()
             delay(1000);
         }
 
-        ESP_LOGI("WaltracMain", "Command mode time frame ended after %ds. Entering main loop ...", cntMntCmdTimeout);
+        ESP_LOGI("WaltracSetup", "Command mode time frame ended after %ds. Entering main loop ...", cntMntCmdTimeout);
     } else {
-        ESP_LOGW("WaltracMain", "Cannot subscribe command topic for entering command mode.");
+        ESP_LOGW("WaltracSetup", "Cannot subscribe command topic for entering command mode.");
     }
 }
 
