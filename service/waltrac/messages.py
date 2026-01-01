@@ -8,12 +8,6 @@ from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 
 
-WT_CMD_TYPE_DISCOVER = 0
-WT_CMD_TYPE_SETINTERVAL = 1
-WT_CMD_TYPE_SETNAME = 2
-WT_CMD_TYPE_EXIT = 3
-
-
 class Payload(ABC):
 	"""Abstract base class for payload types that support signing/verification.
 
@@ -333,3 +327,9 @@ class Command(Payload):
 			f"Command(header={self.header!r}, "
 			f"arg={self.arg!r}, hmac={self.hmac!r})"
 		)
+
+class CommandAction:
+	DISCOVER = 0
+	SETINTERVAL = 1
+	SETNAME = 2
+	EXIT = 3
