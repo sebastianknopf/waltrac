@@ -29,6 +29,18 @@ def _on_message_discover(mqtt: Client, userdata, message) -> None:
         logging.debug("Failed to parse incoming message: %s", e)
         logging.debug(f"Message: {message.payload.hex()}")
         return
+    
+def _on_message_monitor(mqtt: Client, userdata, message) -> None:
+    try:
+        position: Position = Position.init(message.payload)
+        if position.verify(_secret):
+            print(str(position))
+        else:
+            print("Received message with invalid signature.")
+    except Exception as e:
+        logging.debug("Failed to parse incoming message: %s", e)
+        logging.debug(f"Message: {message.payload.hex()}")
+        return
 
 def commander(secret: str, mqtt: str) -> None:
     global _secret, _device_id
@@ -88,25 +100,61 @@ def commander(secret: str, mqtt: str) -> None:
         while True:
             command: str = input('> ').strip()
 
-            if command.startswith('setinterval'):
+            if command.startswith('monitor'):
+                mqtt.on_message = _on_message_monitor
+                
+                mqtt.subscribe(f"{mqtt_topic_base}waltrac/pos/{_device_id}")
+                logging.debug("Subscribed to MQTT topic: %s", f"{mqtt_topic_base}waltrac/pos/{_device_id}")
+
+                print("Monitoring for 5 minutes. Press Ctrl+C to stop early.")
+
+                seconds: int = 0
+                while seconds < 300:
+                    try:
+                        sleep(1)
+                        seconds += 1
+                    except KeyboardInterrupt:
+                        break
+
+                mqtt.unsubscribe(f"{mqtt_topic_base}waltrac/pos/{_device_id}")
+                logging.debug("Unsubscribed from MQTT topic: %s", f"{mqtt_topic_base}waltrac/pos/{_device_id}")
+
+                mqtt.on_message = None
+
+            elif command.startswith('setinterval'):
+                cmdargs: list[str] = command.split(':', 1)
+                if len(cmdargs) != 2:
+                    print("Invalid command. Usage: setinterval:<seconds>. Type 'help' for a list of commands.")
+                    continue
+
+                if not cmdargs[1].isdigit() or int(cmdargs[1]) < 1:
+                    print("Invalid interval. It must be a positive integer representing seconds.")
+                    continue
+                
                 command: Command = Command()
                 command.set_header(CommandAction.SETINTERVAL)
-                command.arg = '30'
+                command.arg = cmdargs[1]
 
-                mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/24587c6f0c64", command.serialize(secret))
+                mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/{_device_id}", command.serialize(secret))
             elif command.startswith('setname'):
+                cmdargs: list[str] = command.split(':', 1)
+                if len(cmdargs) != 2:
+                    print("Invalid command. Usage: setname:<name>. Type 'help' for a list of commands.")
+                    continue
+                
                 command: Command = Command()
                 command.set_header(CommandAction.SETNAME)
-                command.arg = 'My Waltrac Device'
+                command.arg = cmdargs[1]
 
-                mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/24587c6f0c64", command.serialize(secret))
+
+                mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/{_device_id}", command.serialize(secret))
             elif command == 'help':
                 pass
             elif command == 'exit':
                 command: Command = Command()
                 command.set_header(CommandAction.EXIT)
 
-                mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/24587c6f0c64", command.serialize(secret))
+                mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/{_device_id}", command.serialize(secret))
 
                 break
             else:
