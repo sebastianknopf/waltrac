@@ -262,6 +262,13 @@ bool waitForInitialGnssFix()
         ESP_LOGE("Waltrac", "Could not disconnect from the LTE network.");
         return false;
     }
+
+    /* Configure GNSS for cold start */
+    if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_MEDIUM, WALTER_MODEM_GNSS_ACQ_MODE_COLD_WARM_START)) {
+        ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
+    } else {
+        ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
+    }
     
     const uint8_t maxGnssFixAttempts = MAX_GNSS_FIX_ATTEMPTS;
     for (uint8_t i = 0; i < maxGnssFixAttempts; i++) {
@@ -322,14 +329,11 @@ bool attemptGnssFix(uint32_t numAttempts)
         return false;
     }
 
-    /* Optional: Reconfigure GNSS with last valid fix - This might speed up consecutive fixes */
-    if(latestGnssFix.estimatedConfidence <= MAX_GNSS_CONFIDENCE) {
-        /* Reconfigure GNSS for potential quick fix */
-        if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_HIGH, WALTER_MODEM_GNSS_ACQ_MODE_HOT_START)) {
-            ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
-        } else {
-            ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
-        }
+    /* Reconfigure GNSS for potential quick fix */
+    if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_HIGH, WALTER_MODEM_GNSS_ACQ_MODE_HOT_START)) {
+        ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
+    } else {
+        ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
     }
 
     for (uint8_t i = 0; i < numAttempts; i++) {
