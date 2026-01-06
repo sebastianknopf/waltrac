@@ -2,16 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waltrac Realtime GNSS Tracker</title>
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
     <style>
         html, body {
             margin: 0;
             height: 100%;
             font-family: Roboto, Arial, sans-serif;
+        }
+
+        body {
             display: flex;
             flex-direction: column;
         }
@@ -23,11 +26,57 @@
             font-size: 1.2rem;
             font-weight: 500;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+
+        /* =========================
+           Map container
+        ========================== */
+
+        #map-container {
+            position: relative;
+            height: 65vh;
+            transition: height 0.25s ease;
+        }
+
+        #map-container.fullscreen {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            height: 100vh;
         }
 
         #map {
-            flex: 1;
+            height: 100%;
+            width: 100%;
         }
+
+        /* =========================
+           Fullscreen Button
+        ========================== */
+
+        .fullscreen-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1001;
+            background-color: #018685;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        }
+
+        .fullscreen-btn:hover {
+            background-color: #016a66;
+        }
+
+        /* =========================
+           Footer (default: mobile)
+        ========================== */
 
         footer {
             padding: 12px;
@@ -44,15 +93,8 @@
             border-radius: 4px;
             border: 1px solid #ccc;
             font-size: 0.9rem;
-            min-width: 120px;
             flex: 1;
-        }
-
-        .connection-controls {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: nowrap;
+            min-width: 120px;
         }
 
         button {
@@ -70,6 +112,12 @@
             background-color: #016a66;
         }
 
+        .connection-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .status {
             font-size: 0.85rem;
             white-space: nowrap;
@@ -85,9 +133,38 @@
             color: #d32f2f;
         }
 
-        @media (max-width:600px) {
-            footer { flex-direction: column; align-items: stretch; }
-            .connection-controls { justify-content: space-between; }
+        /* =========================
+           Desktop layout
+        ========================== */
+
+        @media (min-width: 768px) {
+            #map-container {
+                flex: 1;
+                height: auto;
+            }
+
+            footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 900;
+            }
+
+            body {
+                padding-bottom: 96px; /* space for footer */
+            }
+        }
+
+        /* =========================
+           Mobile layout tweaks
+        ========================== */
+
+        @media (max-width: 767px) {
+            footer {
+                flex-direction: column;
+                align-items: stretch;
+            }
         }
     </style>
 </head>
@@ -95,10 +172,13 @@
 
 <header>Waltrac Realtime GNSS Tracker</header>
 
-<div id="map"></div>
+<div id="map-container">
+    <button class="fullscreen-btn" id="fullscreenBtn">Fullscreen</button>
+    <div id="map"></div>
+</div>
 
 <footer>
-    <input id="host" placeholder="Host (e.g. broker.example.com)">
+    <input id="host" placeholder="Host">
     <input id="port" placeholder="Port">
     <input id="username" placeholder="Username">
     <input id="password" type="password" placeholder="Password">
@@ -115,138 +195,119 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-    let client = null;
     const TOPIC = "waltrac/pos/#";
+    let client = null;
 
-    // Map & markers
-    const map = L.map("map").setView([51,10],6);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+    const map = L.map("map").setView([51, 10], 6);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
     const markers = {};
 
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
     const btn = document.getElementById("connectBtn");
+    const mapContainer = document.getElementById("map-container");
+    const fullscreenBtn = document.getElementById("fullscreenBtn");
 
-    function setStatus(text, cls="") {
+    fullscreenBtn.addEventListener("click", () => {
+        mapContainer.classList.toggle("fullscreen");
+        fullscreenBtn.textContent =
+            mapContainer.classList.contains("fullscreen")
+                ? "Exit fullscreen"
+                : "Fullscreen";
+        setTimeout(() => map.invalidateSize(), 300);
+    });
+
+    function setStatus(text, cls = "") {
         statusEl.textContent = text;
         statusEl.className = "status " + cls;
     }
 
-    function setError(text="") {
-        errorEl.textContent = text;
-    }
-
-    // Robust parser for Waltrac Position payload
     function parsePosition(payload) {
         const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
         let offset = 0;
 
-        if(payload.byteLength < 17) return null; // minimal length check
+        if (payload.byteLength < 17) return null;
 
-        const header = view.getUint8(offset); 
+        const header = view.getUint8(offset++);
+        if (!(header & 0x02)) return null;
 
-        // Check first bit of header for valid position
-        if((header & 0b00000001) === 0) return null; // invalid, ignore
-        offset += 1;
+        view.getUint8(offset++); // interval
+        const confidence = view.getUint8(offset++);
+        const satellites = view.getUint8(offset++);
 
-        const interval = view.getUint8(offset); offset += 1;
-        const confidence = view.getUint8(offset); offset += 1;
-        const satellites = view.getUint8(offset); offset += 1;
-
-        // device ID: 6 bytes
-        if(offset + 6 > payload.byteLength) return null;
         const devBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, 6);
         offset += 6;
-        const devHex = Array.from(devBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
 
-        // Latitude / Longitude: 4 bytes each
-        if(offset + 8 > payload.byteLength) return null;
-        const latInt = view.getInt32(offset,false); offset += 4;
-        const lonInt = view.getInt32(offset,false); offset += 4;
-        const lat = latInt / 1e7;
-        const lon = lonInt / 1e7;
+        const deviceHex = Array.from(devBytes)
+            .map(b => b.toString(16).padStart(2, "0"))
+            .join("");
 
-        // optional name
-        let name = "";
-        if(offset < payload.byteLength){
-            const nameLen = view.getUint8(offset); offset += 1;
-            if(nameLen > 0 && offset + nameLen <= payload.byteLength){
-                const nameBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, nameLen);
-                try { name = new TextDecoder("utf-8").decode(nameBytes); } catch {}
+        const lat = view.getInt32(offset, false) / 1e7;
+        offset += 4;
+        const lon = view.getInt32(offset, false) / 1e7;
+        offset += 4;
+
+        let name = deviceHex;
+        if (offset < payload.byteLength) {
+            const len = view.getUint8(offset++);
+            if (len && offset + len <= payload.byteLength) {
+                name = new TextDecoder().decode(
+                    new Uint8Array(payload.buffer, payload.byteOffset + offset, len)
+                );
             }
         }
 
-        return { deviceHex: devHex, name, lat, lon, satellites, confidence };
+        return { name, lat, lon, satellites, confidence };
     }
 
     function handleMessage(topic, payload) {
         const msg = parsePosition(payload);
-        if(!msg) return; // ignore invalid positions
+        if (!msg) return;
 
-        const { deviceHex, name, lat, lon, satellites, confidence } = msg;
-        const id = name || deviceHex;
+        const popupHtml = `
+            <strong>${msg.name}</strong><br><br>
+            Num Satellites: ${msg.satellites}<br>
+            Confidence: ${msg.confidence}<br><br>
+            Position: ${msg.lat.toFixed(6)}, ${msg.lon.toFixed(6)}
+        `;
 
-        if(!markers[id]){
-            markers[id] = L.marker([lat, lon]).addTo(map);
+        if (!markers[msg.name]) {
+            markers[msg.name] = L.marker([msg.lat, msg.lon]).addTo(map);
         } else {
-            markers[id].setLatLng([lat, lon]);
+            markers[msg.name].setLatLng([msg.lat, msg.lon]);
         }
 
-        // Formatted popup HTML with extra line breaks
-        const popupHTML = `
-            <div>
-                <strong>${id}</strong><br><br>
-                Num Satellites: ${satellites}<br>
-                Confidence: ${confidence}<br><br>
-                Position: ${lat.toFixed(6)}, ${lon.toFixed(6)}
-            </div>
-        `;
-        markers[id].bindPopup(popupHTML);
+        markers[msg.name].bindPopup(popupHtml);
     }
 
     function connect() {
-        setError("");
         setStatus("Connecting…", "connecting");
 
-        const host = document.getElementById("host").value.trim();
-        const port = document.getElementById("port").value.trim();
-        const username = document.getElementById("username").value.trim();
-        const password = document.getElementById("password").value;
-
-        if(!host || !port){
-            setError("Host and Port must be provided");
-            return;
-        }
-
-        if(client) client.end(true);
-
-        client = mqtt.connect(`wss://${host}:${port}/mqtt`, { username, password, connectTimeout: 4000 });
+        client = mqtt.connect(`wss://${host.value}:${port.value}/mqtt`, {
+            username: username.value,
+            password: password.value
+        });
 
         client.on("connect", () => {
-            setStatus("Connected","connected");
+            setStatus("Connected", "connected");
             btn.textContent = "Disconnect";
             client.subscribe(TOPIC);
         });
 
         client.on("error", err => {
-            console.error(err);
-            setStatus("Error","error");
-            setError("Connection failed: " + err.message);
-            btn.textContent = "Connect";
-            client.end(true);
-            client = null;
+            setStatus("Error", "error");
+            errorEl.textContent = err.message;
         });
 
-        client.on("reconnect", () => setStatus("Reconnecting…","connecting"));
         client.on("message", handleMessage);
     }
 
     function disconnect() {
-        if(client) client.end(true);
+        if (client) client.end(true);
         client = null;
         btn.textContent = "Connect";
         setStatus("Not connected");
-        setError("");
     }
 
     btn.addEventListener("click", () => {
