@@ -230,7 +230,7 @@
         if (payload.byteLength < 17) return null;
 
         const header = view.getUint8(offset++);
-        if (!(header & 0x02)) return null;
+        if (!(header & 0x01)) return null;
 
         view.getUint8(offset++); // interval
         const confidence = view.getUint8(offset++);
