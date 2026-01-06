@@ -202,11 +202,11 @@ std::vector<uint8_t> Position::serialize(const char* key) {
 
 void Position::setHeader(bool isValid) {
     header = 0x80;                      // MSB immer 1
-    header |= (isValid ? 1 : 0) << 1;   // Bit 0 = Flag
+    header |= (isValid ? 1 : 0);        // Bit 0 = Flag
 }
 
 void Position::getHeader(bool &isValid) {
-    isValid = (header >> 1) & 0x01;     // Bit 6 = Flag
+    isValid = header & 0x01;            // Bit 0 = Flag
 }
 
 std::string Position::toString() const {

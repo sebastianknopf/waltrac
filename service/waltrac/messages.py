@@ -121,7 +121,7 @@ class Position(Payload):
 		else:
 			b = int(self.header)
 
-		valid = bool((b >> 1) & 0x01)
+		valid = bool(b & 0x01)
 
 		return (valid,)
 
