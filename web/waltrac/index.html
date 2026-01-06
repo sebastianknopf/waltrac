@@ -1,28 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Waltrac Realtime GNSS Tracker</title>
+    <meta charset="UTF-8">
+    <title>Waltrac Realtime GNSS Tracker</title>
 
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
-<style>
-html, body { margin:0; height:100%; font-family:Roboto, Arial, sans-serif; display:flex; flex-direction:column; }
-header { background-color:#018685; color:white; padding:12px 16px; font-size:1.2rem; font-weight:500; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
-#map { flex:1; }
-footer { padding:12px; background:#fafafa; box-shadow:0 -2px 6px rgba(0,0,0,0.1); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-footer input { padding:8px; border-radius:4px; border:1px solid #ccc; font-size:0.9rem; min-width:120px; flex:1; }
-.connection-controls { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
-button { background-color:#018685; color:white; border:none; border-radius:4px; padding:8px 14px; cursor:pointer; font-size:0.9rem; white-space:nowrap; }
-button:hover { background-color:#016a66; }
-.status { font-size:0.85rem; white-space:nowrap; }
-.status.connected { color:#2e7d32; }
-.status.error { color:#d32f2f; }
-.status.connecting { color:#555; }
-#error { width:100%; font-size:0.85rem; color:#d32f2f; }
-@media (max-width:600px) { footer { flex-direction:column; align-items:stretch; } .connection-controls { justify-content:space-between; } }
-</style>
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            font-family: Roboto, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background-color: #018685;
+            color: white;
+            padding: 12px 16px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        #map {
+            flex: 1;
+        }
+
+        footer {
+            padding: 12px;
+            background: #fafafa;
+            box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        footer input {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 0.9rem;
+            min-width: 120px;
+            flex: 1;
+        }
+
+        .connection-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+
+        button {
+            background-color: #018685;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background-color: #016a66;
+        }
+
+        .status {
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .status.connected { color: #2e7d32; }
+        .status.error { color: #d32f2f; }
+        .status.connecting { color: #555; }
+
+        #error {
+            width: 100%;
+            font-size: 0.85rem;
+            color: #d32f2f;
+        }
+
+        @media (max-width:600px) {
+            footer { flex-direction: column; align-items: stretch; }
+            .connection-controls { justify-content: space-between; }
+        }
+    </style>
 </head>
 <body>
 
@@ -31,114 +98,160 @@ button:hover { background-color:#016a66; }
 <div id="map"></div>
 
 <footer>
-<input id="host" placeholder="Host (e.g. broker.example.com)">
-<input id="port" placeholder="Port">
-<input id="username" placeholder="Username">
-<input id="password" type="password" placeholder="Password">
+    <input id="host" placeholder="Host (e.g. broker.example.com)">
+    <input id="port" placeholder="Port">
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
 
-<div class="connection-controls">
-<button id="connectBtn">Connect</button>
-<div id="status" class="status">Not connected</div>
-</div>
+    <div class="connection-controls">
+        <button id="connectBtn">Connect</button>
+        <div id="status" class="status">Not connected</div>
+    </div>
 
-<div id="error"></div>
+    <div id="error"></div>
 </footer>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-let client = null;
-const TOPIC = "waltrac/pos/#";
+    let client = null;
+    const TOPIC = "waltrac/pos/#";
 
-// Map & markers
-const map = L.map("map").setView([51,10],6);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
-const markers = {};
+    // Map & markers
+    const map = L.map("map").setView([51,10],6);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+    const markers = {};
 
-const statusEl = document.getElementById("status");
-const errorEl = document.getElementById("error");
-const btn = document.getElementById("connectBtn");
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const btn = document.getElementById("connectBtn");
 
-function setStatus(text, cls="") { statusEl.textContent=text; statusEl.className="status "+cls; }
-function setError(text="") { errorEl.textContent=text; }
+    function setStatus(text, cls="") {
+        statusEl.textContent = text;
+        statusEl.className = "status " + cls;
+    }
 
-// Robust parser for Waltrac Position payload
-function parsePosition(payload) {
-    // Use only actual bytes of the message
-    const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-    let offset = 0;
+    function setError(text="") {
+        errorEl.textContent = text;
+    }
 
-    if(payload.byteLength < 17) return null; // minimal length
+    // Robust parser for Waltrac Position payload
+    function parsePosition(payload) {
+        const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        let offset = 0;
 
-    offset += 4; // skip header, interval, confidence, satellites
+        if(payload.byteLength < 17) return null; // minimal length check
 
-    // device ID: 6 bytes
-    if(offset + 6 > payload.byteLength) return null;
-    const devBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, 6);
-    offset += 6;
-    const devHex = Array.from(devBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+        const header = view.getUint8(offset); 
 
-    // Lat/Lon: 4 bytes each
-    if(offset + 8 > payload.byteLength) return null;
-    const latInt = view.getInt32(offset,false); offset+=4;
-    const lonInt = view.getInt32(offset,false); offset+=4;
-    const lat = latInt/1e7;
-    const lon = lonInt/1e7;
+        // Check first bit of header for valid position
+        if((header & 0b00000001) === 0) return null; // invalid, ignore
+        offset += 1;
 
-    // optional name
-    let name = "";
-    if(offset < payload.byteLength){
-        const nameLen = view.getUint8(offset); offset+=1;
-        if(nameLen>0 && offset+nameLen <= payload.byteLength){
-            const nameBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, nameLen);
-            try { name = new TextDecoder("utf-8").decode(nameBytes); } catch{}
+        const interval = view.getUint8(offset); offset += 1;
+        const confidence = view.getUint8(offset); offset += 1;
+        const satellites = view.getUint8(offset); offset += 1;
+
+        // device ID: 6 bytes
+        if(offset + 6 > payload.byteLength) return null;
+        const devBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, 6);
+        offset += 6;
+        const devHex = Array.from(devBytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+
+        // Latitude / Longitude: 4 bytes each
+        if(offset + 8 > payload.byteLength) return null;
+        const latInt = view.getInt32(offset,false); offset += 4;
+        const lonInt = view.getInt32(offset,false); offset += 4;
+        const lat = latInt / 1e7;
+        const lon = lonInt / 1e7;
+
+        // optional name
+        let name = "";
+        if(offset < payload.byteLength){
+            const nameLen = view.getUint8(offset); offset += 1;
+            if(nameLen > 0 && offset + nameLen <= payload.byteLength){
+                const nameBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, nameLen);
+                try { name = new TextDecoder("utf-8").decode(nameBytes); } catch {}
+            }
         }
+
+        return { deviceHex: devHex, name, lat, lon, satellites, confidence };
     }
 
-    return { deviceHex: devHex, name, lat, lon };
-}
+    function handleMessage(topic, payload) {
+        const msg = parsePosition(payload);
+        if(!msg) return; // ignore invalid positions
 
-function handleMessage(topic,payload){
-    const msg=parsePosition(payload);
-    if(!msg) return;
-    const { deviceHex, name, lat, lon }=msg;
-    const id = name || deviceHex;
+        const { deviceHex, name, lat, lon, satellites, confidence } = msg;
+        const id = name || deviceHex;
 
-    if(!markers[id]){
-        markers[id]=L.marker([lat,lon]).addTo(map);
-        markers[id].bindPopup(`${id}`);
-    } else {
-        markers[id].setLatLng([lat,lon]);
+        if(!markers[id]){
+            markers[id] = L.marker([lat, lon]).addTo(map);
+        } else {
+            markers[id].setLatLng([lat, lon]);
+        }
+
+        // Formatted popup HTML with extra line breaks
+        const popupHTML = `
+            <div>
+                <strong>${id}</strong><br><br>
+                Num Satellites: ${satellites}<br>
+                Confidence: ${confidence}<br><br>
+                Position: ${lat.toFixed(6)}, ${lon.toFixed(6)}
+            </div>
+        `;
+        markers[id].bindPopup(popupHTML);
     }
 
-    markers[id].getPopup().setContent(`${id}: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
-}
+    function connect() {
+        setError("");
+        setStatus("Connecting…", "connecting");
 
-function connect(){
-    setError(""); setStatus("Connecting…","connecting");
-    const host=document.getElementById("host").value.trim();
-    const port=document.getElementById("port").value.trim();
-    const username=document.getElementById("username").value.trim();
-    const password=document.getElementById("password").value;
+        const host = document.getElementById("host").value.trim();
+        const port = document.getElementById("port").value.trim();
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
 
-    if(!host||!port){ setError("Host and Port must be provided"); return; }
+        if(!host || !port){
+            setError("Host and Port must be provided");
+            return;
+        }
 
-    if(client) client.end(true);
+        if(client) client.end(true);
 
-    client=mqtt.connect(`wss://${host}:${port}/mqtt`,{username,password,connectTimeout:4000});
-    client.on("connect",()=>{ setStatus("Connected","connected"); btn.textContent="Disconnect"; client.subscribe(TOPIC); });
-    client.on("error",err=>{ console.error(err); setStatus("Error","error"); setError("Connection failed: "+err.message); btn.textContent="Connect"; client.end(true); client=null; });
-    client.on("reconnect",()=>setStatus("Reconnecting…","connecting"));
-    client.on("message",handleMessage);
-}
+        client = mqtt.connect(`wss://${host}:${port}/mqtt`, { username, password, connectTimeout: 4000 });
 
-function disconnect(){
-    if(client) client.end(true);
-    client=null; btn.textContent="Connect"; setStatus("Not connected"); setError("");
-}
+        client.on("connect", () => {
+            setStatus("Connected","connected");
+            btn.textContent = "Disconnect";
+            client.subscribe(TOPIC);
+        });
 
-btn.addEventListener("click",()=>{ btn.textContent==="Connect"?connect():disconnect(); });
+        client.on("error", err => {
+            console.error(err);
+            setStatus("Error","error");
+            setError("Connection failed: " + err.message);
+            btn.textContent = "Connect";
+            client.end(true);
+            client = null;
+        });
+
+        client.on("reconnect", () => setStatus("Reconnecting…","connecting"));
+        client.on("message", handleMessage);
+    }
+
+    function disconnect() {
+        if(client) client.end(true);
+        client = null;
+        btn.textContent = "Connect";
+        setStatus("Not connected");
+        setError("");
+    }
+
+    btn.addEventListener("click", () => {
+        btn.textContent === "Connect" ? connect() : disconnect();
+    });
 </script>
 
 </body>
