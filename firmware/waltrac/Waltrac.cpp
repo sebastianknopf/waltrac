@@ -264,10 +264,10 @@ bool waitForInitialGnssFix()
     }
 
     /* Configure GNSS for cold start */
-    if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_MEDIUM, WALTER_MODEM_GNSS_ACQ_MODE_COLD_WARM_START)) {
-        ESP_LOGD("Waltrac", "GNSS reconfigured for potential quick fix.");
+    if(modem.gnssConfig(WALTER_MODEM_GNSS_SENS_MODE_HIGH, WALTER_MODEM_GNSS_ACQ_MODE_COLD_WARM_START)) {
+        ESP_LOGD("Waltrac", "GNSS reconfigured for cold start.");
     } else {
-        ESP_LOGE("Waltrac", "Could not reconfigure GNSS for potential quick fix.");
+        ESP_LOGE("Waltrac", "Could not reconfigure GNSS for cold start.");
     }
     
     const uint8_t maxGnssFixAttempts = MAX_GNSS_FIX_ATTEMPTS;

@@ -83,10 +83,12 @@ void setup()
 
 void loop() 
 {
+    static bool latestFixValid = false;
+    
     uint64_t procDurationStart = millis();
 
     // send GNSS data update
-    if (gnssFixNumSatellites < 1) {
+    if (!latestFixValid) {
         ESP_LOGI("WaltracMain", "Looking for GNSS satellites ...");
         
         do
@@ -105,12 +107,15 @@ void loop()
             } else {
                 ESP_LOGE("WaltracMain", "Could not send position data update.");
             }
+
+            latestFixValid = waitForInitialGnssFix();
         }
-        while(!waitForInitialGnssFix());
+        while(!latestFixValid);
     } else {
         ESP_LOGI("WaltracMain", "Performing GNSS Update ...");
 
-        if (attemptGnssFix()) {
+        latestFixValid = attemptGnssFix();
+        if (latestFixValid) {
             ESP_LOGI("WaltracMain", "Sending GNSS data update ...");
 
             Messages::Position position;
@@ -125,6 +130,7 @@ void loop()
 
             std::vector<uint8_t> data = position.serialize(WT_CFG_SECRET);
             if (coapSendPositionUpdate(&data[0], data.size())) {
+                delay(250);
                 ESP_LOGI("WaltracMain", "Sent GNSS data update successfully.");
             } else {
                 ESP_LOGE("WaltracMain", "Could not send GNSS data update.");
