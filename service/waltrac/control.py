@@ -148,8 +148,6 @@ def commander(secret: str, mqtt: str) -> None:
 
 
                 mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/{_device_id}", command.serialize(secret))
-            elif command == 'help':
-                pass
             elif command == 'exit':
                 command: Command = Command()
                 command.set_header(CommandAction.EXIT)
@@ -157,6 +155,13 @@ def commander(secret: str, mqtt: str) -> None:
                 mqtt.publish(f"{mqtt_topic_base}waltrac/cmd/{_device_id}", command.serialize(secret))
 
                 break
+            elif command == 'help':
+                print("Following commands are available:")
+                print("monitor - Monitors incoming positions of the discovered device for 5 minutes. Device needs to be in operations mode.")
+                print("setinterval:<interval> - Set the minimum update interval in seconds for the device. Requires an integer, minimum is 10.")
+                print("setname:<name> - Set the name for the device. Requires a valid UTF-8 string.")
+                print("exit - Quits the control application and sends a command to the discovered device to enter operations mode.")
+                print("help - Displays the help for available commands.")
             else:
                 print(f'Unknown command: {command}. Enter \'help\' for a list of commands.')
 
